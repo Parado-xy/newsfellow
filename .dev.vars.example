@@ -1,0 +1,3 @@
+TELEGRAM_BOT_TOKEN=replace_me
+TELEGRAM_WEBHOOK_SECRET=replace_with_random_value
+TELEGRAM_OWNER_CHAT_ID=replace_me
