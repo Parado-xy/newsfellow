@@ -6,7 +6,10 @@ async function telegram(env: Env, method: string, body: object): Promise<void> {
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
   });
-  if (!response.ok) throw new Error(`Telegram ${method} failed: ${response.status}`);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Telegram ${method} failed: ${response.status} ${detail.slice(0, 500)}`);
+  }
 }
 
 export async function sendMessage(env: Env, chatId: string, text: string): Promise<void> {
