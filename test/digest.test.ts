@@ -11,7 +11,8 @@ test('composes Telegram-safe attributed digest', async () => {
   assert.equal(chunks.length, 1);
   assert.match(chunks[0], /A &lt;major&gt; release/);
   assert.match(chunks[0], /Why it matters/);
-  assert.match(chunks[0], /Example/);
+  assert.match(chunks[0], /<i>Source: Example<\/i>/);
+  assert.doesNotMatch(chunks[0], /<small>/);
 });
 
 test('supports a labeled scheduled round-up', async () => {
