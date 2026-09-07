@@ -78,7 +78,7 @@ export async function composeDigest(
   const sections = await Promise.all(stories.map(async (story, index) => {
     const topics = JSON.parse(story.topics_json) as string[];
     const summary = await summarize(story.title, story.excerpt, topics);
-    return `<b>${index + 1}. <a href="${escapeHtml(story.canonical_url)}">${escapeHtml(story.title)}</a></b>\n${escapeHtml(summary.whatHappened)}\n\n<i>Why it matters:</i> ${escapeHtml(summary.whyItMatters)}\n<small>${escapeHtml(story.publisher)}</small>`;
+    return `<b>${index + 1}. <a href="${escapeHtml(story.canonical_url)}">${escapeHtml(story.title)}</a></b>\n${escapeHtml(summary.whatHappened)}\n\n<i>Why it matters:</i> ${escapeHtml(summary.whyItMatters)}\n<i>Source: ${escapeHtml(story.publisher)}</i>`;
   }));
   const chunks: string[] = [];
   let current = `<b>NEWSFELLOW • ${escapeHtml(heading)}</b>\n\n`;
