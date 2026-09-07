@@ -46,6 +46,15 @@ function parseModelSummary(value: unknown): Summary | null {
   return { whatHappened, whyItMatters };
 }
 
+function parseModelResponse(response: string): Summary | null {
+  const cleaned = response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try { return parseModelSummary(JSON.parse(cleaned.slice(start, end + 1))); }
+  catch { return null; }
+}
+
 export function workersAiSummarizer(ai: Ai): Summarizer {
   return async (title, excerpt, topics) => {
     const fallback = extractiveSummary(title, excerpt, topics);
@@ -62,16 +71,31 @@ export function workersAiSummarizer(ai: Ai): Summarizer {
             content: `Title: ${title}\nTopics: ${topics.join(', ')}\nSource text: ${excerpt.slice(0, 2400)}\n\nWrite whatHappened in at most 2 sentences and whyItMatters in 1 cautious sentence.`
           }
         ],
-        max_tokens: 180,
+        max_tokens: 260,
         temperature: 0.1,
         response_format: { type: 'json_object' }
       });
       const response = typeof result === 'object' && result && 'response' in result ? String(result.response) : '';
-      const parsed = parseModelSummary(JSON.parse(response));
+      const parsed = parseModelResponse(response);
       return parsed ?? fallback;
     } catch (error) {
       console.warn(JSON.stringify({ event: 'ai_summary_fallback', error: String(error) }));
       return fallback;
+    }
+  };
+}
+
+export function withTimeout(summarize: Summarizer, timeoutMs = 6_000): Summarizer {
+  return async (title, excerpt, topics) => {
+    const fallback = extractiveSummary(title, excerpt, topics);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        summarize(title, excerpt, topics),
+        new Promise<Summary>((resolve) => { timeout = setTimeout(() => resolve(fallback), timeoutMs); })
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
   };
 }

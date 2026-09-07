@@ -7,12 +7,14 @@ NewsFellow is a private Telegram technology-news companion. This repository impl
 - curated RSS/Atom collection;
 - URL normalization, exact deduplication, transparent relevance scoring;
 - Workers AI summaries using `@cf/meta/llama-3.2-1b-instruct`, with automatic zero-cost extractive fallback;
-- Cloudflare D1 persistence and a scheduled collection trigger;
+- Cloudflare D1 persistence, batched writes, and automatic morning/evening round-ups;
 - offline unit tests with no paid API dependency.
 
 ## Architecture
 
-`Cron or /brief → collect feeds → normalize → score/dedupe → D1 → compose → Telegram`
+`Cron → collect feeds → batch into D1 → compose → Telegram`
+
+`/brief → read D1 → bounded summary generation → Telegram`
 
 The primary summarizer is Cloudflare's hosted Llama 3.2 1B Instruct model, selected because it explicitly supports summarization and fits the free Workers AI allocation at personal usage. The `extractiveSummary` function remains a deterministic fallback when Workers AI is unavailable, over quota, disabled, or returns malformed output.
 
@@ -45,6 +47,10 @@ Do not commit `.dev.vars`, bot tokens, or chat IDs.
 
 Workers AI is enabled through the `AI` binding in `wrangler.jsonc`; it does not require a separate model API key. Set `AI_SUMMARIZER_ENABLED` to `false` to force extractive-only mode.
 
+## Delivery schedule
+
+Cloudflare invokes a lightweight scheduler check once per hour. It uses `OWNER_TIMEZONE` to deliver at 8:00 AM and 7:00 PM local time, including across daylight-saving changes; collection only runs for those two delivery windows. Each delivery stores candidates through batched D1 operations and sends a round-up from the latest 14-hour window. `/brief` deliberately reads already-collected stories so Telegram webhook work stays within its execution window.
+
 ## Find your Telegram chat ID
 
 Send a message to the bot, then temporarily inspect Telegram's `getUpdates` response before registering the webhook. Copy `message.chat.id`, store it as `TELEGRAM_OWNER_CHAT_ID`, and avoid retaining the response.
@@ -59,6 +65,6 @@ The tests run on Node's built-in test runner and do not call the network.
 
 ## Phase boundaries
 
-Implemented: secure bot skeleton, health/status, manual brief, curated collection, persistence, Workers AI summarization with deterministic fallback, and tests.
+Implemented: secure bot skeleton, health/status, reliable manual briefs, curated collection, batched persistence, Workers AI summarization with bounded deterministic fallback, automatic morning/evening delivery, and tests.
 
-Deferred to Phase 2+: automatic digest delivery, preferences and feedback buttons, saved stories, multi-user onboarding, delivery ledger, and semantic clustering.
+Deferred to Phase 2+: preferences and feedback buttons, saved stories, multi-user onboarding, delivery ledger, and semantic clustering.

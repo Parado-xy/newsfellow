@@ -14,6 +14,7 @@ async function fetchSource(source: Source): Promise<StoryCandidate[]> {
 
 export async function collectNews(env: Env): Promise<CollectionReport> {
   const report: CollectionReport = { sourcesOk: 0, sourcesFailed: 0, candidates: 0, inserted: 0 };
+  const candidates: StoryCandidate[] = [];
   for (let start = 0; start < SOURCES.length; start += 5) {
     const batch = SOURCES.slice(start, start + 5);
     const results = await Promise.allSettled(batch.map(fetchSource));
@@ -26,25 +27,32 @@ export async function collectNews(env: Env): Promise<CollectionReport> {
         continue;
       }
       report.sourcesOk++; report.candidates += result.value.length;
-      for (const story of result.value) {
-        const outcome = await env.DB.prepare(`INSERT OR IGNORE INTO stories
+      candidates.push(...result.value);
+    }
+  }
+
+  // D1 batch operations avoid spending the Worker lifetime on hundreds of
+  // sequential network round trips. Keep batches modest for predictable size.
+  for (let start = 0; start < candidates.length; start += 50) {
+    const statements = candidates.slice(start, start + 50).map((story) =>
+      env.DB.prepare(`INSERT OR IGNORE INTO stories
           (id, source_id, title, canonical_url, excerpt, publisher, published_at, fingerprint, topics_json, score)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
-            story.id, story.sourceId, story.title, story.canonicalUrl, story.excerpt.slice(0, 2000), story.publisher,
-            story.publishedAt, story.fingerprint, JSON.stringify(story.topics), story.score
-          ).run();
-        report.inserted += outcome.meta.changes ?? 0;
-      }
-    }
+        story.id, story.sourceId, story.title, story.canonicalUrl, story.excerpt.slice(0, 2000), story.publisher,
+        story.publishedAt, story.fingerprint, JSON.stringify(story.topics), story.score
+      )
+    );
+    const outcomes = await env.DB.batch(statements);
+    report.inserted += outcomes.reduce((total, outcome) => total + (outcome.meta.changes ?? 0), 0);
   }
   console.log(JSON.stringify({ event: 'collection_completed', ...report }));
   return report;
 }
 
-export async function loadTopStories(env: Env, limit: number): Promise<StoredStory[]> {
+export async function loadTopStories(env: Env, limit: number, windowHours = 96): Promise<StoredStory[]> {
   const result = await env.DB.prepare(`SELECT id, title, canonical_url, excerpt, publisher, published_at, topics_json, score
-    FROM stories WHERE published_at >= datetime('now', '-96 hours')
-    ORDER BY score DESC, published_at DESC LIMIT ?`).bind(limit * 4).all<StoredStory>();
+    FROM stories WHERE published_at >= datetime('now', ?)
+    ORDER BY score DESC, published_at DESC LIMIT ?`).bind(`-${windowHours} hours`, limit * 4).all<StoredStory>();
 
   const seen = new Set<string>();
   const unique: StoredStory[] = [];
@@ -63,7 +71,8 @@ function escapeHtml(value: string): string {
 
 export async function composeDigest(
   stories: StoredStory[],
-  summarize: Summarizer = async (title, excerpt, topics) => extractiveSummary(title, excerpt, topics)
+  summarize: Summarizer = async (title, excerpt, topics) => extractiveSummary(title, excerpt, topics),
+  heading = 'TECH BRIEF'
 ): Promise<string[]> {
   if (!stories.length) return ['<b>NEWSFELLOW</b>\n\nNo material stories were found in the current source window.'];
   const sections = await Promise.all(stories.map(async (story, index) => {
@@ -72,7 +81,7 @@ export async function composeDigest(
     return `<b>${index + 1}. <a href="${escapeHtml(story.canonical_url)}">${escapeHtml(story.title)}</a></b>\n${escapeHtml(summary.whatHappened)}\n\n<i>Why it matters:</i> ${escapeHtml(summary.whyItMatters)}\n<small>${escapeHtml(story.publisher)}</small>`;
   }));
   const chunks: string[] = [];
-  let current = '<b>NEWSFELLOW • TECH BRIEF</b>\n\n';
+  let current = `<b>NEWSFELLOW • ${escapeHtml(heading)}</b>\n\n`;
   for (const section of sections) {
     if ((current + section).length > 3900) { chunks.push(current.trim()); current = ''; }
     current += `${section}\n\n`;
