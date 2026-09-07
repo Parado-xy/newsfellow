@@ -1,6 +1,6 @@
 import type { Env, TelegramUpdate } from './types.ts';
-import { collectNews } from './news/pipeline.ts';
-import { handleTelegramUpdate } from './telegram.ts';
+import { scheduledPeriod } from './schedule.ts';
+import { handleTelegramUpdate, sendScheduledRoundup } from './telegram.ts';
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { 'cache-control': 'no-store' } });
@@ -22,7 +22,14 @@ export default {
     return json({ error: 'not_found' }, 404);
   },
 
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(collectNews(env));
+  async scheduled(controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    const period = scheduledPeriod(controller.scheduledTime, env.OWNER_TIMEZONE ?? 'America/Chicago');
+    if (!period) return;
+    try {
+      await sendScheduledRoundup(env, period);
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'scheduled_roundup_failed', period, error: String(error) }));
+      throw error;
+    }
   }
 } satisfies ExportedHandler<Env>;

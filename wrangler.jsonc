@@ -4,7 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
   "ai": { "binding": "AI" },
-  "triggers": { "crons": ["15 11 * * *"] },
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
   "d1_databases": [
     {
       "binding": "DB",
