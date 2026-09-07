@@ -1,21 +1,28 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "newsfellow",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-01",
-  "ai": { "binding": "AI" },
-  "triggers": { "crons": ["15 11 * * *"] },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "newsfellow",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "vars": {
-    "OWNER_TIMEZONE": "America/Chicago",
-    "MAX_DIGEST_STORIES": "6",
-    "AI_SUMMARIZER_ENABLED": "true"
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "newsfellow",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-09-01",
+	"ai": {
+		"binding": "AI"
+	},
+	"triggers": {
+		"crons": [
+			"15 11 * * *"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "newsfellow",
+			"database_id": "ce6d4811-384f-45bb-9185-052a52e09d00",
+			"migrations_dir":"migrations",
+			"remote": true
+		}
+	],
+	"vars": {
+		"OWNER_TIMEZONE": "America/Chicago",
+		"MAX_DIGEST_STORIES": "6",
+		"AI_SUMMARIZER_ENABLED": "true"
+	}
 }
