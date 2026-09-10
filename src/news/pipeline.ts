@@ -14,6 +14,8 @@ async function fetchSource(source: Source): Promise<StoryCandidate[]> {
 
 export async function collectNews(env: Env, audience?: NewsAudience): Promise<CollectionReport> {
   const report: CollectionReport = { sourcesOk: 0, sourcesFailed: 0, candidates: 0, inserted: 0 };
+  const run = await env.DB.prepare('INSERT INTO collection_runs DEFAULT VALUES').run();
+  const runId = run.meta.last_row_id;
   const candidates: StoryCandidate[] = [];
   const sources = audience ? SOURCES.filter((source) => source.audiences.includes(audience)) : SOURCES;
   for (let start = 0; start < sources.length; start += 5) {
@@ -52,6 +54,9 @@ export async function collectNews(env: Env, audience?: NewsAudience): Promise<Co
     const outcomes = await env.DB.batch(statements);
     report.inserted += outcomes.reduce((total, outcome) => total + (outcome.meta.changes ?? 0), 0);
   }
+  await env.DB.prepare(`UPDATE collection_runs SET completed_at = CURRENT_TIMESTAMP,
+    sources_ok = ?, sources_failed = ?, candidates = ?, inserted = ? WHERE id = ?`)
+    .bind(report.sourcesOk, report.sourcesFailed, report.candidates, report.inserted, runId).run();
   console.log(JSON.stringify({ event: 'collection_completed', ...report }));
   return report;
 }
