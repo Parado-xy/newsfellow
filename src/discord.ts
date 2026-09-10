@@ -22,6 +22,12 @@ async function postWebhook(env: Env, route: DiscordRoute, content: string): Prom
   }
 }
 
+export async function testDiscordWebhook(env: Env, route: DiscordRoute): Promise<void> {
+  const destination = route === 'opportunities' ? '#opportunities' : '#founder-news';
+  await postWebhook(env, route,
+    `**NEWSFELLOW • CONNECTION TEST**\n\n✅ Delivery to ${destination} is configured correctly.\n\n*This is a synthetic test; no news story was published.*`);
+}
+
 export interface DiscordChannelResult {
   route: DiscordRoute;
   outcome: 'sent' | 'already_sent' | 'in_progress' | 'empty' | 'failed';

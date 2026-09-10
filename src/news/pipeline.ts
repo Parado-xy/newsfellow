@@ -9,6 +9,7 @@ export interface CollectionReport {
   audience: NewsAudience | 'all';
   sourcesOk: number;
   sourcesFailed: number;
+  sourcesQuarantined: number;
   candidates: number;
   inserted: number;
 }
@@ -51,13 +52,19 @@ async function recordSourceHealth(env: Env, source: Source, success: boolean, du
 }
 
 export async function collectNews(env: Env, audience?: NewsAudience, runCorrelationId: string = crypto.randomUUID()): Promise<CollectionReport> {
-  const report: CollectionReport = { correlationId: runCorrelationId, audience: audience ?? 'all', sourcesOk: 0, sourcesFailed: 0, candidates: 0, inserted: 0 };
+  const report: CollectionReport = { correlationId: runCorrelationId, audience: audience ?? 'all', sourcesOk: 0, sourcesFailed: 0, sourcesQuarantined: 0, candidates: 0, inserted: 0 };
   const run = await env.DB.prepare(`INSERT INTO collection_runs (audience, correlation_id, status)
     VALUES (?, ?, 'running')`).bind(report.audience, runCorrelationId).run();
   const runId = run.meta.last_row_id;
   try {
     const candidates: StoryCandidate[] = [];
-    const sources = audience ? SOURCES.filter((source) => source.audiences.includes(audience)) : SOURCES;
+    const configuredSources = audience ? SOURCES.filter((source) => source.audiences.includes(audience)) : SOURCES;
+    const quarantined = await env.DB.prepare(`SELECT source_id FROM source_health
+      WHERE consecutive_failures >= 3 AND last_failure_at >= datetime('now', '-24 hours')`)
+      .all<{ source_id: string }>();
+    const quarantinedIds = new Set(quarantined.results.map((source) => source.source_id));
+    const sources = configuredSources.filter((source) => !quarantinedIds.has(source.id));
+    report.sourcesQuarantined = configuredSources.length - sources.length;
     for (let start = 0; start < sources.length; start += 5) {
       const batch = sources.slice(start, start + 5);
       const results = await Promise.allSettled(batch.map(fetchSource));
@@ -105,14 +112,14 @@ export async function collectNews(env: Env, audience?: NewsAudience, runCorrelat
       report.inserted += outcomes.reduce((total, outcome, index) => total + (index % 2 === 0 ? (outcome.meta.changes ?? 0) : 0), 0);
     }
     await env.DB.prepare(`UPDATE collection_runs SET completed_at = CURRENT_TIMESTAMP, status = 'success',
-      sources_ok = ?, sources_failed = ?, candidates = ?, inserted = ? WHERE id = ?`)
-      .bind(report.sourcesOk, report.sourcesFailed, report.candidates, report.inserted, runId).run();
+      sources_ok = ?, sources_failed = ?, sources_quarantined = ?, candidates = ?, inserted = ? WHERE id = ?`)
+      .bind(report.sourcesOk, report.sourcesFailed, report.sourcesQuarantined, report.candidates, report.inserted, runId).run();
     console.log(JSON.stringify({ event: 'collection_completed', ...report }));
     return report;
   } catch (error) {
     await env.DB.prepare(`UPDATE collection_runs SET completed_at = CURRENT_TIMESTAMP, status = 'failed',
-      error = ?, sources_ok = ?, sources_failed = ?, candidates = ?, inserted = ? WHERE id = ?`)
-      .bind(String(error).slice(0, 1000), report.sourcesOk, report.sourcesFailed, report.candidates, report.inserted, runId).run();
+      error = ?, sources_ok = ?, sources_failed = ?, sources_quarantined = ?, candidates = ?, inserted = ? WHERE id = ?`)
+      .bind(String(error).slice(0, 1000), report.sourcesOk, report.sourcesFailed, report.sourcesQuarantined, report.candidates, report.inserted, runId).run();
     console.error(JSON.stringify({ event: 'collection_failed', correlationId: runCorrelationId, audience: report.audience, error: String(error) }));
     throw error;
   }
