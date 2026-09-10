@@ -32,6 +32,22 @@ export interface FeedEntry {
   excerpt: string;
   publishedAt: string;
   author?: string;
+  relatedUrls?: string[];
+}
+
+export type OpportunityType = 'grant' | 'accelerator' | 'competition' | 'program' | 'event' | 'news';
+export type ParticipationMode = 'in-person' | 'virtual' | 'hybrid';
+
+export interface OpportunityMetadata {
+  type: OpportunityType;
+  confidence: number;
+  deadlineDate?: string;
+  deadlineText?: string;
+  eligibility?: string;
+  location?: string;
+  participationMode?: ParticipationMode;
+  applicationUrl?: string;
+  rolling: boolean;
 }
 
 export interface StoryCandidate extends FeedEntry {
@@ -43,6 +59,7 @@ export interface StoryCandidate extends FeedEntry {
   topics: string[];
   score: number;
   audiences: NewsAudience[];
+  opportunity: OpportunityMetadata;
 }
 
 export interface StoredStory {
@@ -55,6 +72,15 @@ export interface StoredStory {
   topics_json: string;
   score: number;
   audiences_json: string;
+  opportunity_type: OpportunityType | null;
+  deadline_date: string | null;
+  deadline_text: string | null;
+  eligibility: string | null;
+  opportunity_location: string | null;
+  participation_mode: ParticipationMode | null;
+  application_url: string | null;
+  opportunity_confidence: number;
+  is_rolling: number;
 }
 
 export interface TelegramUpdate {

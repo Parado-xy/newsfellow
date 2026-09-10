@@ -13,6 +13,7 @@ NewsFellow is a shared news engine with two delivery profiles: a private Telegra
 - audience-aware storage so personal technology stories do not leak into the community feed.
 - delivery-window and per-message idempotency with a D1 delivery ledger;
 - source-health history, bounded delivery retries, correlation IDs, and private Telegram operations reporting.
+- deterministic opportunity classification and source-grounded deadline, eligibility, location, format, and application-link extraction.
 
 ## Architecture
 
@@ -57,6 +58,8 @@ For FLA, create an incoming webhook on the Discord news channel, store its URL a
 
 The Telegram owner chat is also the private monitoring endpoint. Use `/report` for the latest collection, delivery, and source-health summary. Successful scheduled FLA deliveries send a concise Telegram confirmation; delivery failures and severe source degradation send warning alerts. Apply `0003_reliability_monitoring.sql` before deploying this version.
 
+FLA opportunity intelligence recognizes grants, accelerators, pitch competitions, founder programs, and events. It adds `CLOSING SOON`, `THIS MONTH`, `ROLLING`, and `NEW` labels; excludes opportunities with verified expired deadlines; and only publishes structured details supported by the feed content. Existing stored stories are enriched during their next collection. Apply `0004_opportunity_intelligence.sql` before deploying this version.
+
 ## Delivery schedule
 
 Cloudflare invokes a lightweight scheduler check once per hour. It uses `OWNER_TIMEZONE` to deliver Telegram at 8:00 AM and 7:00 PM local time, including across daylight-saving changes. When enabled, FLA receives its Discord startup radar during the morning window. Each audience is collected and ranked independently. `/brief` performs a fresh personal-source collection before composing a digest from the last 48 hours, while `/status` reports the most recent completed collection.
@@ -81,4 +84,6 @@ FLA foundation: Discord delivery, Louisiana-first sources, community-specific ra
 
 Reliability foundation: delivery and chunk ledgers, stable scheduled-window keys, retry-safe partial delivery, collection correlation IDs, source-health history, and Telegram monitoring.
 
-Deferred to Phase 2+: deadline extraction, event/calendar adapters, moderator approval queue, delivery ledger, feedback signals, and semantic clustering.
+Opportunity foundation: deterministic classification, conservative deadline parsing, eligibility and participation details, direct application-link detection, urgency ranking, and expired-opportunity filtering.
+
+Deferred to Phase 2+: event/calendar adapters, moderator approval queue, feedback signals, saved opportunities, and semantic clustering.

@@ -1,4 +1,5 @@
-import type { FeedEntry, Source, StoryCandidate } from '../types.ts';
+import type { FeedEntry, OpportunityMetadata, Source, StoryCandidate } from '../types.ts';
+import { analyzeOpportunity, urgencyLabel } from './opportunity.ts';
 
 const entities: Record<string, string> = {
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", nbsp: ' '
@@ -36,6 +37,12 @@ function entryUrl(block: string): string {
   return decodeXml(atomAlternate?.[1] ?? atomAny?.[1] ?? plainText(rss));
 }
 
+function relatedUrls(block: string): string[] {
+  const rawContent = tag(block, ['description', 'summary', 'content:encoded', 'content']);
+  const urls = [...rawContent.matchAll(/href=["'](https?:\/\/[^"']+)["']/gi)].map((match) => decodeXml(match[1]));
+  return [...new Set(urls)].slice(0, 12);
+}
+
 export function parseFeed(xml: string): FeedEntry[] {
   const blocks = [...xml.matchAll(/<(item|entry)\b[^>]*>([\s\S]*?)<\/\1>/gi)].map((m) => m[2]);
   return blocks.flatMap((block) => {
@@ -49,7 +56,8 @@ export function parseFeed(xml: string): FeedEntry[] {
       url,
       excerpt: plainText(tag(block, ['description', 'summary', 'content:encoded', 'content'])),
       publishedAt: Number.isNaN(parsed) ? new Date().toISOString() : new Date(parsed).toISOString(),
-      author: plainText(tag(block, ['author', 'dc:creator'])) || undefined
+      author: plainText(tag(block, ['author', 'dc:creator'])) || undefined,
+      relatedUrls: relatedUrls(block)
     }];
   });
 }
@@ -74,18 +82,21 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function score(entry: FeedEntry, source: Source, now: Date): number {
+function score(entry: FeedEntry, source: Source, opportunity: OpportunityMetadata, now: Date): number {
   const hours = Math.max(0, (now.getTime() - Date.parse(entry.publishedAt)) / 3_600_000);
   const freshness = Math.max(0, 1 - hours / 96);
   const strategic = source.topics.some((t) => ['ai', 'startups', 'developer-infrastructure', 'cybersecurity', 'rust'].includes(t)) ? 1 : 0.6;
   const localBoost = source.region === 'louisiana' ? 0.2 : 0;
   const opportunityBoost = source.topics.some((t) => ['funding', 'events', 'accelerators', 'grants'].includes(t)) ? 0.08 : 0;
-  return Number((0.4 * source.trustWeight + 0.32 * freshness + 0.2 * strategic + localBoost + opportunityBoost).toFixed(4));
+  const actionableBoost = opportunity.type !== 'news' ? 0.12 * opportunity.confidence : 0;
+  const urgencyBoost = ['CLOSING SOON', 'THIS MONTH'].includes(urgencyLabel(opportunity, now) ?? '') ? 0.08 : 0;
+  return Number((0.4 * source.trustWeight + 0.32 * freshness + 0.2 * strategic + localBoost + opportunityBoost + actionableBoost + urgencyBoost).toFixed(4));
 }
 
 export async function normalizeEntry(entry: FeedEntry, source: Source, now = new Date()): Promise<StoryCandidate> {
   const canonicalUrl = canonicalizeUrl(entry.url);
   const fingerprint = titleFingerprint(entry.title);
+  const opportunity = analyzeOpportunity(entry);
   return {
     ...entry,
     id: await sha256(canonicalUrl),
@@ -94,7 +105,8 @@ export async function normalizeEntry(entry: FeedEntry, source: Source, now = new
     canonicalUrl,
     fingerprint,
     topics: source.topics,
-    score: score(entry, source, now),
-    audiences: source.audiences
+    score: score(entry, source, opportunity, now),
+    audiences: source.audiences,
+    opportunity
   };
 }
