@@ -11,6 +11,8 @@ NewsFellow is a shared news engine with two delivery profiles: a private Telegra
 - offline unit tests with no paid API dependency.
 - a Louisiana-first FLA source profile and Discord webhook delivery with rate-limit retries;
 - audience-aware storage so personal technology stories do not leak into the community feed.
+- delivery-window and per-message idempotency with a D1 delivery ledger;
+- source-health history, bounded delivery retries, correlation IDs, and private Telegram operations reporting.
 
 ## Architecture
 
@@ -53,6 +55,8 @@ Workers AI is enabled through the `AI` binding in `wrangler.jsonc`; it does not 
 
 For FLA, create an incoming webhook on the Discord news channel, store its URL as `DISCORD_NEWS_WEBHOOK_URL`, then set `FLA_NEWS_ENABLED` to `true`. The protected `POST /discord/test` endpoint queues a manual test when called with `Authorization: Bearer <DISCORD_ADMIN_SECRET>`. Discord mentions are disabled in all generated posts.
 
+The Telegram owner chat is also the private monitoring endpoint. Use `/report` for the latest collection, delivery, and source-health summary. Successful scheduled FLA deliveries send a concise Telegram confirmation; delivery failures and severe source degradation send warning alerts. Apply `0003_reliability_monitoring.sql` before deploying this version.
+
 ## Delivery schedule
 
 Cloudflare invokes a lightweight scheduler check once per hour. It uses `OWNER_TIMEZONE` to deliver Telegram at 8:00 AM and 7:00 PM local time, including across daylight-saving changes. When enabled, FLA receives its Discord startup radar during the morning window. Each audience is collected and ranked independently. `/brief` performs a fresh personal-source collection before composing a digest from the last 48 hours, while `/status` reports the most recent completed collection.
@@ -74,5 +78,7 @@ The tests run on Node's built-in test runner and do not call the network.
 Implemented: secure bot skeleton, health/status, reliable manual briefs, curated collection, batched persistence, Workers AI summarization with bounded deterministic fallback, automatic morning/evening delivery, and tests.
 
 FLA foundation: Discord delivery, Louisiana-first sources, community-specific ranking and formatting, safe mention handling, retry behavior, and a protected test route.
+
+Reliability foundation: delivery and chunk ledgers, stable scheduled-window keys, retry-safe partial delivery, collection correlation IDs, source-health history, and Telegram monitoring.
 
 Deferred to Phase 2+: deadline extraction, event/calendar adapters, moderator approval queue, delivery ledger, feedback signals, and semantic clustering.
