@@ -85,7 +85,7 @@ export async function deliverOnce(
 
 export async function operationsReport(env: Env): Promise<string> {
   const lastCollection = await env.DB.prepare(`SELECT completed_at, audience, status, sources_ok,
-    sources_failed, candidates, inserted, error FROM collection_runs ORDER BY id DESC LIMIT 1`)
+    sources_failed, sources_quarantined, candidates, inserted, error FROM collection_runs ORDER BY id DESC LIMIT 1`)
     .first<Record<string, string | number | null>>();
   const lastDelivery = await env.DB.prepare(`SELECT platform, audience, period, status, sent_count,
     message_count, attempts, sent_at, last_error FROM deliveries ORDER BY id DESC LIMIT 1`)
@@ -97,7 +97,7 @@ export async function operationsReport(env: Env): Promise<string> {
     WHERE status = 'failed' AND created_at >= datetime('now', '-24 hours')`).first<{ count: number }>();
 
   const collection = lastCollection
-    ? `${lastCollection.status} • ${lastCollection.audience ?? 'all'} • ${lastCollection.sources_ok} OK/${lastCollection.sources_failed} failed • ${lastCollection.completed_at ?? 'in progress'}`
+    ? `${lastCollection.status} • ${lastCollection.audience ?? 'all'} • ${lastCollection.sources_ok} OK/${lastCollection.sources_failed} failed/${lastCollection.sources_quarantined ?? 0} quarantined • ${lastCollection.completed_at ?? 'in progress'}`
     : 'none recorded';
   const delivery = lastDelivery
     ? `${lastDelivery.status} • ${lastDelivery.platform}/${lastDelivery.audience} ${lastDelivery.period} • ${lastDelivery.sent_count}/${lastDelivery.message_count} messages • ${lastDelivery.sent_at ?? 'not sent'}`

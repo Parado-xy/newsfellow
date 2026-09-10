@@ -88,12 +88,12 @@ export async function handleTelegramUpdate(update: TelegramUpdate, env: Env): Pr
       await sendMessage(env, chatId, await operationsReport(env));
     } else if (command === '/status') {
       const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM stories').first<{ count: number }>();
-      const lastCollection = await env.DB.prepare(`SELECT completed_at, sources_ok, sources_failed, inserted
+      const lastCollection = await env.DB.prepare(`SELECT completed_at, sources_ok, sources_failed, sources_quarantined, inserted
         FROM collection_runs WHERE completed_at IS NOT NULL ORDER BY id DESC LIMIT 1`)
-        .first<{ completed_at: string; sources_ok: number; sources_failed: number; inserted: number }>();
+        .first<{ completed_at: string; sources_ok: number; sources_failed: number; sources_quarantined: number; inserted: number }>();
       const mode = env.AI_SUMMARIZER_ENABLED === 'true' ? 'Workers AI with extractive fallback' : 'extractive summaries';
       const collectionStatus = lastCollection
-        ? `${lastCollection.completed_at} (${lastCollection.sources_ok} sources OK, ${lastCollection.sources_failed} failed, ${lastCollection.inserted} new)`
+        ? `${lastCollection.completed_at} (${lastCollection.sources_ok} sources OK, ${lastCollection.sources_failed} failed, ${lastCollection.sources_quarantined ?? 0} quarantined, ${lastCollection.inserted} new)`
         : 'No completed collection recorded';
       await sendMessage(env, chatId, `<b>NewsFellow status</b>\nBot: healthy\nStored stories: ${count?.count ?? 0}\nLast collection: ${collectionStatus}\nMode: ${mode}\nRound-ups: morning and evening`);
     } else {
