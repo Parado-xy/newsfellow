@@ -8,7 +8,7 @@
 	},
 	"triggers": {
 		"crons": [
-			"15 11 * * *"
+			"15 * * * *"
 		]
 	},
 	"d1_databases": [
@@ -23,6 +23,9 @@
 	"vars": {
 		"OWNER_TIMEZONE": "America/Chicago",
 		"MAX_DIGEST_STORIES": "6",
-		"AI_SUMMARIZER_ENABLED": "true"
+		"AI_SUMMARIZER_ENABLED": "true",
+		"FLA_NEWS_ENABLED": "false",
+		"FLA_TIMEZONE": "America/Chicago",
+		"FLA_MAX_DIGEST_STORIES": "6"
 	}
 }

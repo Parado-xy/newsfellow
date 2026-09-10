@@ -25,7 +25,7 @@ async function sendBrief(env: Env, chatId: string): Promise<void> {
 }
 
 export async function sendScheduledRoundup(env: Env, period: 'morning' | 'evening'): Promise<void> {
-  const report = await collectNews(env);
+  const report = await collectNews(env, 'personal');
   const limit = Math.min(10, Math.max(3, Number(env.MAX_DIGEST_STORIES ?? 6)));
   const stories = await loadTopStories(env, limit, 14);
   const summarizer = env.AI_SUMMARIZER_ENABLED === 'true' ? withTimeout(workersAiSummarizer(env.AI), 8_000) : undefined;

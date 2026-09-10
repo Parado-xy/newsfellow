@@ -78,7 +78,9 @@ function score(entry: FeedEntry, source: Source, now: Date): number {
   const hours = Math.max(0, (now.getTime() - Date.parse(entry.publishedAt)) / 3_600_000);
   const freshness = Math.max(0, 1 - hours / 96);
   const strategic = source.topics.some((t) => ['ai', 'startups', 'developer-infrastructure', 'cybersecurity', 'rust'].includes(t)) ? 1 : 0.6;
-  return Number((0.45 * source.trustWeight + 0.35 * freshness + 0.2 * strategic).toFixed(4));
+  const localBoost = source.region === 'louisiana' ? 0.2 : 0;
+  const opportunityBoost = source.topics.some((t) => ['funding', 'events', 'accelerators', 'grants'].includes(t)) ? 0.08 : 0;
+  return Number((0.4 * source.trustWeight + 0.32 * freshness + 0.2 * strategic + localBoost + opportunityBoost).toFixed(4));
 }
 
 export async function normalizeEntry(entry: FeedEntry, source: Source, now = new Date()): Promise<StoryCandidate> {
@@ -92,6 +94,7 @@ export async function normalizeEntry(entry: FeedEntry, source: Source, now = new
     canonicalUrl,
     fingerprint,
     topics: source.topics,
-    score: score(entry, source, now)
+    score: score(entry, source, now),
+    audiences: source.audiences
   };
 }

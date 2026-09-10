@@ -31,7 +31,10 @@ export function extractiveSummary(title: string, excerpt: string, topics: string
     cloud: 'This may affect cloud architecture, operating cost, or platform choices.',
     cybersecurity: 'This may create a security exposure or change recommended defensive practice.',
     rust: 'This is relevant to Rust development and systems-programming work.',
-    systems: 'This may influence systems design, performance, or reliability tradeoffs.'
+    systems: 'This may influence systems design, performance, or reliability tradeoffs.',
+    louisiana: 'This could create a timely opportunity, connection, or market signal for builders in Louisiana.',
+    funding: 'This may provide funding or support that a founder can act on.',
+    events: 'This may be a useful place for founders to learn, pitch, or build local relationships.'
   };
   return { whatHappened, whyItMatters: matter[primary] ?? 'This is a potentially meaningful change in the technology landscape.' };
 }

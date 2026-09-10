@@ -7,7 +7,14 @@ export interface Env {
   OWNER_TIMEZONE?: string;
   MAX_DIGEST_STORIES?: string;
   AI_SUMMARIZER_ENABLED?: string;
+  DISCORD_NEWS_WEBHOOK_URL?: string;
+  DISCORD_ADMIN_SECRET?: string;
+  FLA_NEWS_ENABLED?: string;
+  FLA_TIMEZONE?: string;
+  FLA_MAX_DIGEST_STORIES?: string;
 }
+
+export type NewsAudience = 'personal' | 'fla';
 
 export interface Source {
   id: string;
@@ -15,6 +22,8 @@ export interface Source {
   feedUrl: string;
   trustWeight: number;
   topics: string[];
+  audiences: NewsAudience[];
+  region?: 'louisiana' | 'national' | 'global';
 }
 
 export interface FeedEntry {
@@ -33,6 +42,7 @@ export interface StoryCandidate extends FeedEntry {
   fingerprint: string;
   topics: string[];
   score: number;
+  audiences: NewsAudience[];
 }
 
 export interface StoredStory {
@@ -44,6 +54,7 @@ export interface StoredStory {
   published_at: string;
   topics_json: string;
   score: number;
+  audiences_json: string;
 }
 
 export interface TelegramUpdate {
