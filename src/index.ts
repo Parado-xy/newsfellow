@@ -1,4 +1,4 @@
-import type { Env, TelegramUpdate } from './types.ts';
+import type { DiscordRoute, Env, TelegramUpdate } from './types.ts';
 import { scheduledPeriod } from './schedule.ts';
 import { handleTelegramUpdate, sendMonitoringAlert, sendScheduledRoundup } from './telegram.ts';
 import { sendFlaRoundup } from './discord.ts';
@@ -15,11 +15,19 @@ export default {
     if (request.method === 'POST' && url.pathname === '/discord/test') {
       const authorization = request.headers.get('authorization');
       if (!env.DISCORD_ADMIN_SECRET || authorization !== `Bearer ${env.DISCORD_ADMIN_SECRET}`) return json({ error: 'unauthorized' }, 401);
-      ctx.waitUntil(sendFlaRoundup(env).catch(async (error) => {
+      const channelParam = url.searchParams.get('channel');
+      if (channelParam && channelParam !== 'news' && channelParam !== 'opportunities') return json({ error: 'invalid_channel' }, 400);
+      const channel: DiscordRoute | undefined = channelParam === 'news' || channelParam === 'opportunities'
+        ? channelParam
+        : undefined;
+      ctx.waitUntil(sendFlaRoundup(env, undefined, undefined, channel ?? undefined).then(async ({ channels }) => {
+        const failures = channels.filter((result) => result.outcome === 'failed');
+        if (failures.length) throw new Error(failures.map((result) => `${result.route}: ${result.error}`).join('; '));
+      }).catch(async (error) => {
         console.error(JSON.stringify({ event: 'fla_test_failed', error: String(error) }));
         await sendMonitoringAlert(env, 'Discord test failed', String(error)).catch(() => undefined);
       }));
-      return json({ ok: true, queued: 'fla_roundup' }, 202);
+      return json({ ok: true, queued: channel ?? 'all_fla_channels' }, 202);
     }
     if (request.method === 'POST' && url.pathname === '/telegram/webhook') {
       const secret = request.headers.get('x-telegram-bot-api-secret-token');
@@ -59,10 +67,13 @@ export default {
         const result = await sendFlaRoundup(env,
           scheduledDeliveryKey(controller.scheduledTime, env.FLA_TIMEZONE ?? 'America/Chicago', 'fla', 'discord', 'morning'), runId);
         const report = result.report;
-        if (result.outcome === 'sent') {
+        const sent = result.channels.filter((channel) => channel.outcome === 'sent');
+        const failed = result.channels.filter((channel) => channel.outcome === 'failed');
+        if (sent.length) {
           await sendMonitoringAlert(env, 'FLA roundup delivered',
-            `${result.stories} stories sent to Discord. ${report.sourcesOk} sources succeeded, ${report.sourcesFailed} failed.`, runId);
+            `${sent.map((channel) => `${channel.stories} ${channel.route}`).join(', ')} stories sent to Discord. ${report.sourcesOk} sources succeeded, ${report.sourcesFailed} failed.`, runId);
         }
+        if (failed.length) throw new Error(failed.map((channel) => `${channel.route}: ${channel.error}`).join('; '));
         if (report.sourcesOk === 0 || report.sourcesFailed > report.sourcesOk) {
           await sendMonitoringAlert(env, 'FLA sources degraded',
             `${report.sourcesOk} succeeded and ${report.sourcesFailed} failed.`, runId);

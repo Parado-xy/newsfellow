@@ -13,6 +13,7 @@ NewsFellow is a shared news engine with two delivery profiles: a private Telegra
 - audience-aware storage so personal technology stories do not leak into the community feed.
 - delivery-window and per-message idempotency with a D1 delivery ledger;
 - source-health history, bounded delivery retries, correlation IDs, and private Telegram operations reporting.
+- deterministic opportunity classification and source-grounded deadline, eligibility, location, format, and application-link extraction.
 
 ## Architecture
 
@@ -39,6 +40,7 @@ The primary summarizer is Cloudflare's hosted Llama 3.2 1B Instruct model, selec
    - `npx wrangler secret put TELEGRAM_WEBHOOK_SECRET`
    - `npx wrangler secret put TELEGRAM_OWNER_CHAT_ID`
    - `npx wrangler secret put DISCORD_NEWS_WEBHOOK_URL`
+   - `npx wrangler secret put DISCORD_OPPORTUNITIES_WEBHOOK_URL`
    - `npx wrangler secret put DISCORD_ADMIN_SECRET`
 6. Deploy with `npm run deploy`.
 7. Register the webhook:
@@ -53,9 +55,11 @@ Do not commit `.dev.vars`, bot tokens, or chat IDs.
 
 Workers AI is enabled through the `AI` binding in `wrangler.jsonc`; it does not require a separate model API key. Set `AI_SUMMARIZER_ENABLED` to `false` to force extractive-only mode.
 
-For FLA, create an incoming webhook on the Discord news channel, store its URL as `DISCORD_NEWS_WEBHOOK_URL`, then set `FLA_NEWS_ENABLED` to `true`. The protected `POST /discord/test` endpoint queues a manual test when called with `Authorization: Bearer <DISCORD_ADMIN_SECRET>`. Discord mentions are disabled in all generated posts.
+For FLA, create incoming webhooks on `#founder-news` and `#opportunities`, stored as `DISCORD_NEWS_WEBHOOK_URL` and `DISCORD_OPPORTUNITIES_WEBHOOK_URL`, then set `FLA_NEWS_ENABLED` to `true`. General ecosystem stories route to the news channel. Recognized opportunities with supporting structured evidence route to the opportunities channel. Stories are not duplicated across channels. The protected `POST /discord/test` endpoint tests both channels; append `?channel=news` or `?channel=opportunities` to test one. Discord mentions are disabled in all generated posts.
 
 The Telegram owner chat is also the private monitoring endpoint. Use `/report` for the latest collection, delivery, and source-health summary. Successful scheduled FLA deliveries send a concise Telegram confirmation; delivery failures and severe source degradation send warning alerts. Apply `0003_reliability_monitoring.sql` before deploying this version.
+
+FLA opportunity intelligence recognizes grants, accelerators, pitch competitions, founder programs, and events. It adds `CLOSING SOON`, `THIS MONTH`, `ROLLING`, and `NEW` labels; excludes opportunities with verified expired deadlines; and only publishes structured details supported by the feed content. Existing stored stories are enriched during their next collection. Apply `0004_opportunity_intelligence.sql` before deploying this version.
 
 ## Delivery schedule
 
@@ -81,4 +85,6 @@ FLA foundation: Discord delivery, Louisiana-first sources, community-specific ra
 
 Reliability foundation: delivery and chunk ledgers, stable scheduled-window keys, retry-safe partial delivery, collection correlation IDs, source-health history, and Telegram monitoring.
 
-Deferred to Phase 2+: deadline extraction, event/calendar adapters, moderator approval queue, delivery ledger, feedback signals, and semantic clustering.
+Opportunity foundation: deterministic classification, conservative deadline parsing, eligibility and participation details, direct application-link detection, urgency ranking, and expired-opportunity filtering.
+
+Deferred to Phase 2+: event/calendar adapters, moderator approval queue, feedback signals, saved opportunities, and semantic clustering.
