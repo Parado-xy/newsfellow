@@ -1,5 +1,5 @@
 import { SOURCES } from '../config/sources.ts';
-import type { Env, NewsAudience, Source, StoryCandidate, StoredStory } from '../types.ts';
+import type { DiscordRoute, Env, NewsAudience, Source, StoryCandidate, StoredStory } from '../types.ts';
 import { normalizeEntry, parseFeed } from './feed.ts';
 import { extractiveSummary, type Summarizer } from './summarize.ts';
 import { urgencyLabel } from './opportunity.ts';
@@ -118,17 +118,30 @@ export async function collectNews(env: Env, audience?: NewsAudience, runCorrelat
   }
 }
 
-export async function loadTopStories(env: Env, limit: number, windowHours = 96, audience: NewsAudience = 'personal'): Promise<StoredStory[]> {
+export function discordRoute(story: StoredStory): DiscordRoute {
+  return story.opportunity_type && story.opportunity_type !== 'news' && story.opportunity_confidence >= 0.63
+    ? 'opportunities'
+    : 'news';
+}
+
+export async function loadTopStories(
+  env: Env,
+  limit: number,
+  windowHours = 96,
+  audience: NewsAudience = 'personal',
+  route?: DiscordRoute
+): Promise<StoredStory[]> {
   const result = await env.DB.prepare(`SELECT id, title, canonical_url, excerpt, publisher, published_at, topics_json, score, audiences_json,
       opportunity_type, deadline_date, deadline_text, eligibility, opportunity_location, participation_mode,
       application_url, opportunity_confidence, is_rolling
     FROM stories WHERE published_at >= datetime('now', ?) AND audiences_json LIKE ?
       AND (opportunity_type IS NULL OR opportunity_type = 'news' OR deadline_date IS NULL OR deadline_date >= date('now'))
-    ORDER BY score DESC, published_at DESC LIMIT ?`).bind(`-${windowHours} hours`, `%\"${audience}\"%`, limit * 4).all<StoredStory>();
+    ORDER BY score DESC, published_at DESC LIMIT ?`).bind(`-${windowHours} hours`, `%\"${audience}\"%`, limit * 8).all<StoredStory>();
 
   const seen = new Set<string>();
   const unique: StoredStory[] = [];
   for (const story of result.results) {
+    if (route && discordRoute(story) !== route) continue;
     const key = story.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 80);
     if (seen.has(key)) continue;
     seen.add(key); unique.push(story);
@@ -187,9 +200,10 @@ function flaLabels(story: StoredStory, topics: string[], now: Date): string {
 export async function composeDiscordDigest(
   stories: StoredStory[],
   summarize: Summarizer = async (title, excerpt, topics) => extractiveSummary(title, excerpt, topics),
-  heading = 'LOUISIANA STARTUP RADAR'
+  heading = 'LOUISIANA STARTUP RADAR',
+  description = 'Useful news, opportunities, and ecosystem updates for Louisiana builders.'
 ): Promise<string[]> {
-  if (!stories.length) return ['**FOUNDERS LA • STARTUP RADAR**\n\nNo verified, relevant stories were found in the current window.'];
+  if (!stories.length) return [];
   const sections = await Promise.all(stories.map(async (story) => {
     const topics = JSON.parse(story.topics_json) as string[];
     const summary = await summarize(story.title, story.excerpt, topics);
@@ -203,7 +217,7 @@ export async function composeDiscordDigest(
     return `**${flaLabels(story, topics, new Date())} • [${escapeDiscord(story.title)}](${story.canonical_url})**\n${escapeDiscord(summary.whatHappened)}${actionable}\n\n**Why it matters:** ${escapeDiscord(summary.whyItMatters)}\n*Source: ${escapeDiscord(story.publisher)}*`;
   }));
   const chunks: string[] = [];
-  let current = `**FOUNDERS LA • ${heading}**\n*Useful news, opportunities, and ecosystem updates for Louisiana builders.*\n\n`;
+  let current = `**FOUNDERS LA • ${heading}**\n*${description}*\n\n`;
   for (const section of sections) {
     if ((current + section).length > 1900) { chunks.push(current.trim()); current = ''; }
     current += `${section}\n\n`;

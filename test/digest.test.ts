@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { composeDigest, composeDiscordDigest } from '../src/news/pipeline.ts';
+import { composeDigest, composeDiscordDigest, discordRoute } from '../src/news/pipeline.ts';
 
 const noOpportunity = {
   opportunity_type: 'news' as const, deadline_date: null, deadline_text: null, eligibility: null,
@@ -47,4 +47,20 @@ test('composes a Discord-safe Louisiana startup radar', async () => {
   assert.match(chunks[0], /Deadline.*September 28, 2026/);
   assert.match(chunks[0], /Direct application/);
   assert.ok(chunks[0].length < 2000);
+});
+
+test('routes only evidence-backed opportunity classifications to opportunities', () => {
+  const base = {
+    id: 'route', title: 'Applications open', canonical_url: 'https://example.com', excerpt: '', publisher: 'Example',
+    published_at: '2026-09-10T10:00:00Z', topics_json: '[]', score: 1, audiences_json: '[\"fla\"]',
+    deadline_date: null, deadline_text: null, eligibility: null, opportunity_location: null,
+    participation_mode: null, application_url: null, is_rolling: 0
+  };
+  assert.equal(discordRoute({ ...base, opportunity_type: 'grant', opportunity_confidence: 0.63 }), 'opportunities');
+  assert.equal(discordRoute({ ...base, opportunity_type: 'program', opportunity_confidence: 0.55 }), 'news');
+  assert.equal(discordRoute({ ...base, opportunity_type: 'news', opportunity_confidence: 0 }), 'news');
+});
+
+test('does not post empty Discord roundups', async () => {
+  assert.deepEqual(await composeDiscordDigest([]), []);
 });

@@ -8,6 +8,7 @@ export interface Env {
   MAX_DIGEST_STORIES?: string;
   AI_SUMMARIZER_ENABLED?: string;
   DISCORD_NEWS_WEBHOOK_URL?: string;
+  DISCORD_OPPORTUNITIES_WEBHOOK_URL?: string;
   DISCORD_ADMIN_SECRET?: string;
   FLA_NEWS_ENABLED?: string;
   FLA_TIMEZONE?: string;
@@ -15,6 +16,7 @@ export interface Env {
 }
 
 export type NewsAudience = 'personal' | 'fla';
+export type DiscordRoute = 'news' | 'opportunities';
 
 export interface Source {
   id: string;

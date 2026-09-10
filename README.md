@@ -40,6 +40,7 @@ The primary summarizer is Cloudflare's hosted Llama 3.2 1B Instruct model, selec
    - `npx wrangler secret put TELEGRAM_WEBHOOK_SECRET`
    - `npx wrangler secret put TELEGRAM_OWNER_CHAT_ID`
    - `npx wrangler secret put DISCORD_NEWS_WEBHOOK_URL`
+   - `npx wrangler secret put DISCORD_OPPORTUNITIES_WEBHOOK_URL`
    - `npx wrangler secret put DISCORD_ADMIN_SECRET`
 6. Deploy with `npm run deploy`.
 7. Register the webhook:
@@ -54,7 +55,7 @@ Do not commit `.dev.vars`, bot tokens, or chat IDs.
 
 Workers AI is enabled through the `AI` binding in `wrangler.jsonc`; it does not require a separate model API key. Set `AI_SUMMARIZER_ENABLED` to `false` to force extractive-only mode.
 
-For FLA, create an incoming webhook on the Discord news channel, store its URL as `DISCORD_NEWS_WEBHOOK_URL`, then set `FLA_NEWS_ENABLED` to `true`. The protected `POST /discord/test` endpoint queues a manual test when called with `Authorization: Bearer <DISCORD_ADMIN_SECRET>`. Discord mentions are disabled in all generated posts.
+For FLA, create incoming webhooks on `#founder-news` and `#opportunities`, stored as `DISCORD_NEWS_WEBHOOK_URL` and `DISCORD_OPPORTUNITIES_WEBHOOK_URL`, then set `FLA_NEWS_ENABLED` to `true`. General ecosystem stories route to the news channel. Recognized opportunities with supporting structured evidence route to the opportunities channel. Stories are not duplicated across channels. The protected `POST /discord/test` endpoint tests both channels; append `?channel=news` or `?channel=opportunities` to test one. Discord mentions are disabled in all generated posts.
 
 The Telegram owner chat is also the private monitoring endpoint. Use `/report` for the latest collection, delivery, and source-health summary. Successful scheduled FLA deliveries send a concise Telegram confirmation; delivery failures and severe source degradation send warning alerts. Apply `0003_reliability_monitoring.sql` before deploying this version.
 
