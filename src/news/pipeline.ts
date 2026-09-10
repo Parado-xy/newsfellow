@@ -1,5 +1,5 @@
 import { SOURCES } from '../config/sources.ts';
-import type { Env, Source, StoryCandidate, StoredStory } from '../types.ts';
+import type { Env, NewsAudience, Source, StoryCandidate, StoredStory } from '../types.ts';
 import { normalizeEntry, parseFeed } from './feed.ts';
 import { extractiveSummary, type Summarizer } from './summarize.ts';
 
@@ -12,11 +12,14 @@ async function fetchSource(source: Source): Promise<StoryCandidate[]> {
   return Promise.all(entries.map((entry) => normalizeEntry(entry, source)));
 }
 
-export async function collectNews(env: Env): Promise<CollectionReport> {
+export async function collectNews(env: Env, audience?: NewsAudience): Promise<CollectionReport> {
   const report: CollectionReport = { sourcesOk: 0, sourcesFailed: 0, candidates: 0, inserted: 0 };
+  const run = await env.DB.prepare('INSERT INTO collection_runs DEFAULT VALUES').run();
+  const runId = run.meta.last_row_id;
   const candidates: StoryCandidate[] = [];
-  for (let start = 0; start < SOURCES.length; start += 5) {
-    const batch = SOURCES.slice(start, start + 5);
+  const sources = audience ? SOURCES.filter((source) => source.audiences.includes(audience)) : SOURCES;
+  for (let start = 0; start < sources.length; start += 5) {
+    const batch = sources.slice(start, start + 5);
     const results = await Promise.allSettled(batch.map(fetchSource));
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
@@ -35,24 +38,33 @@ export async function collectNews(env: Env): Promise<CollectionReport> {
   // sequential network round trips. Keep batches modest for predictable size.
   for (let start = 0; start < candidates.length; start += 50) {
     const statements = candidates.slice(start, start + 50).map((story) =>
-      env.DB.prepare(`INSERT OR IGNORE INTO stories
-          (id, source_id, title, canonical_url, excerpt, publisher, published_at, fingerprint, topics_json, score)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+      env.DB.prepare(`INSERT INTO stories
+          (id, source_id, title, canonical_url, excerpt, publisher, published_at, fingerprint, topics_json, score, audiences_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            excerpt = excluded.excerpt,
+            published_at = excluded.published_at,
+            topics_json = excluded.topics_json,
+            score = excluded.score,
+            audiences_json = excluded.audiences_json`).bind(
         story.id, story.sourceId, story.title, story.canonicalUrl, story.excerpt.slice(0, 2000), story.publisher,
-        story.publishedAt, story.fingerprint, JSON.stringify(story.topics), story.score
+        story.publishedAt, story.fingerprint, JSON.stringify(story.topics), story.score, JSON.stringify(story.audiences)
       )
     );
     const outcomes = await env.DB.batch(statements);
     report.inserted += outcomes.reduce((total, outcome) => total + (outcome.meta.changes ?? 0), 0);
   }
+  await env.DB.prepare(`UPDATE collection_runs SET completed_at = CURRENT_TIMESTAMP,
+    sources_ok = ?, sources_failed = ?, candidates = ?, inserted = ? WHERE id = ?`)
+    .bind(report.sourcesOk, report.sourcesFailed, report.candidates, report.inserted, runId).run();
   console.log(JSON.stringify({ event: 'collection_completed', ...report }));
   return report;
 }
 
-export async function loadTopStories(env: Env, limit: number, windowHours = 96): Promise<StoredStory[]> {
-  const result = await env.DB.prepare(`SELECT id, title, canonical_url, excerpt, publisher, published_at, topics_json, score
-    FROM stories WHERE published_at >= datetime('now', ?)
-    ORDER BY score DESC, published_at DESC LIMIT ?`).bind(`-${windowHours} hours`, limit * 4).all<StoredStory>();
+export async function loadTopStories(env: Env, limit: number, windowHours = 96, audience: NewsAudience = 'personal'): Promise<StoredStory[]> {
+  const result = await env.DB.prepare(`SELECT id, title, canonical_url, excerpt, publisher, published_at, topics_json, score, audiences_json
+    FROM stories WHERE published_at >= datetime('now', ?) AND audiences_json LIKE ?
+    ORDER BY score DESC, published_at DESC LIMIT ?`).bind(`-${windowHours} hours`, `%\"${audience}\"%`, limit * 4).all<StoredStory>();
 
   const seen = new Set<string>();
   const unique: StoredStory[] = [];
@@ -84,6 +96,38 @@ export async function composeDigest(
   let current = `<b>NEWSFELLOW • ${escapeHtml(heading)}</b>\n\n`;
   for (const section of sections) {
     if ((current + section).length > 3900) { chunks.push(current.trim()); current = ''; }
+    current += `${section}\n\n`;
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks;
+}
+
+function escapeDiscord(value: string): string {
+  return value.replace(/([\\`*_{}\[\]()#+\-.!|>])/g, '\\$1');
+}
+
+function flaLabel(topics: string[]): string {
+  if (topics.includes('louisiana')) return 'LOUISIANA';
+  if (topics.includes('funding') || topics.includes('grants')) return 'FUNDING';
+  if (topics.includes('events')) return 'EVENT';
+  return 'FOUNDER RADAR';
+}
+
+export async function composeDiscordDigest(
+  stories: StoredStory[],
+  summarize: Summarizer = async (title, excerpt, topics) => extractiveSummary(title, excerpt, topics),
+  heading = 'LOUISIANA STARTUP RADAR'
+): Promise<string[]> {
+  if (!stories.length) return ['**FOUNDERS LA • STARTUP RADAR**\n\nNo verified, relevant stories were found in the current window.'];
+  const sections = await Promise.all(stories.map(async (story) => {
+    const topics = JSON.parse(story.topics_json) as string[];
+    const summary = await summarize(story.title, story.excerpt, topics);
+    return `**${flaLabel(topics)} • [${escapeDiscord(story.title)}](${story.canonical_url})**\n${escapeDiscord(summary.whatHappened)}\n\n**Why it matters:** ${escapeDiscord(summary.whyItMatters)}\n*Source: ${escapeDiscord(story.publisher)}*`;
+  }));
+  const chunks: string[] = [];
+  let current = `**FOUNDERS LA • ${heading}**\n*Useful news, opportunities, and ecosystem updates for Louisiana builders.*\n\n`;
+  for (const section of sections) {
+    if ((current + section).length > 1900) { chunks.push(current.trim()); current = ''; }
     current += `${section}\n\n`;
   }
   if (current.trim()) chunks.push(current.trim());
