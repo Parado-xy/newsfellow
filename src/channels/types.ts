@@ -75,7 +75,11 @@ export interface ChannelFormatter {
 
 export interface ChannelTransport {
   readonly id: ChannelId;
-  send(destination: string, message: string): Promise<void>;
+  send(destination: string, message: string): Promise<TransportReceipt | void>;
+}
+
+export interface TransportReceipt {
+  externalMessageId?: string;
 }
 
 export interface DeliveryTarget {
