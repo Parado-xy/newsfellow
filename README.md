@@ -17,9 +17,19 @@ NewsFellow is a shared news engine with two delivery profiles: a private Telegra
 
 ## Architecture
 
-`Cron → audience-specific feeds → D1 → audience ranking → Telegram / Discord`
+NewsFellow is split into channel-neutral application services and channel adapters:
 
-`/brief → read D1 → bounded summary generation → Telegram`
+`Webhook → adapter normalization → command service → news service → adapter formatter/transport`
+
+`Cron → audience collection → D1 → ranking → semantic digest → adapter formatter/transport`
+
+- `src/news/` owns collection, normalization, ranking, summarization, and semantic brief preparation.
+- `src/commands.ts` handles normalized commands and delegates authorization, formatting, and transport through injected channel contracts.
+- `src/channels/` owns inbound webhook normalization, platform formatting, API transport, retries, and message-size constraints.
+- `src/telegram.ts` and `src/discord.ts` are compatibility orchestration modules for the existing routes and schedules.
+- `src/reliability.ts` provides channel-neutral delivery idempotency, chunk recovery, and operational data.
+
+The channel contracts reserve normalized inbound commands, outbound transport, webhook delivery-status events, and platform formatters. A WhatsApp adapter can therefore be added without changing collection, ranking, summarization, brief generation, command dispatch, or delivery-ledger behavior. WhatsApp itself is intentionally not implemented in PR #6.
 
 The primary summarizer is Cloudflare's hosted Llama 3.2 1B Instruct model, selected because it explicitly supports summarization and fits the free Workers AI allocation at personal usage. The `extractiveSummary` function remains a deterministic fallback when Workers AI is unavailable, over quota, disabled, or returns malformed output.
 
