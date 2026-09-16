@@ -21,12 +21,14 @@ test('composes Telegram-safe attributed digest', async () => {
   const chunks = await composeDigest([{
     id: '1', title: 'A <major> release', canonical_url: 'https://example.com/story',
     excerpt: 'A company released an important new platform capability for developers.', publisher: 'Example',
-    published_at: '2026-09-07T10:00:00Z', topics_json: '["developer-infrastructure"]', score: 0.9, audiences_json: '["personal"]', ...noOpportunity
+    published_at: '2026-09-07T10:00:00Z', topics_json: '["developer-infrastructure"]', score: 0.9, audiences_json: '["personal"]',
+    cluster_source_count: 2, ...noOpportunity
   }]);
   assert.equal(chunks.length, 1);
   assert.match(chunks[0], /A &lt;major&gt; release/);
   assert.match(chunks[0], /Why it matters/);
-  assert.match(chunks[0], /<i>Source: Example<\/i>/);
+  assert.match(chunks[0], /<i>Source: Example/);
+  assert.match(chunks[0], /2 reports/);
   assert.doesNotMatch(chunks[0], /<small>/);
 });
 
@@ -47,7 +49,7 @@ test('composes a Discord-safe Louisiana startup radar', async () => {
     audiences_json: '["fla"]', opportunity_type: 'grant', deadline_date: '2026-09-28',
     deadline_text: 'Applications close September 28, 2026.', eligibility: 'Open to Louisiana founders.',
     opportunity_location: 'Louisiana', participation_mode: 'virtual', application_url: 'https://example.com/apply',
-    opportunity_confidence: 0.9, is_rolling: 0
+    opportunity_confidence: 0.9, is_rolling: 0, cluster_source_count: 3
   }]);
   assert.equal(chunks.length, 1);
   assert.match(chunks[0], /FOUNDERS LA • LOUISIANA STARTUP RADAR/);
@@ -55,6 +57,7 @@ test('composes a Discord-safe Louisiana startup radar', async () => {
   assert.match(chunks[0], /Why it matters/);
   assert.match(chunks[0], /Deadline.*September 28, 2026/);
   assert.match(chunks[0], /Direct application/);
+  assert.match(chunks[0], /Coverage.*3 reports/);
   assert.ok(chunks[0].length < 2000);
 });
 

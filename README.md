@@ -44,6 +44,12 @@ Set `AI_SUMMARY_MODEL` to change the summary model without changing code. Option
 
 Prompt or schema changes must receive a new version identifier so old artifacts cannot be silently reused. `npm run test:eval` runs deterministic offline quality gates; these fixtures should grow alongside new prompts and AI operations.
 
+### Semantic enrichment and clustering
+
+Before ranking a delivery window, NewsFellow enriches a bounded candidate set with a typed event classification, topics, named entities, geographies, affected audiences, exact evidence excerpts, and relevance scores. Entities, geographies, and evidence must occur in the supplied source text; unsupported fields cause the entire model result to fall back to deterministic metadata. Enrichment is cached by story input and version, and failures never block a brief.
+
+Workers AI embeddings and deterministic title/entity similarity group multiple reports about the same event. Embeddings alone cannot merge unrelated stories: semantic matches require a high vector threshold plus lexical or entity evidence, and conflicting event types are rejected. The highest-trust source becomes the canonical story, while the channel formatter notes multi-source coverage. D1 stores intelligence, embeddings, cluster membership, similarity, and match method so `/report` can expose semantic-index health. This D1 implementation fits the current bounded news volume and leaves a clean path to Vectorize when corpus size or query patterns justify it.
+
 ## Prerequisites
 
 - Node.js 22+

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { hashInput } from '../src/ai/artifacts.ts';
 import { evaluateSummarySuite } from '../src/ai/evaluation.ts';
 import { modelFor } from '../src/ai/models.ts';
-import { parseJsonObject, validateSummary } from '../src/ai/schema.ts';
+import { parseJsonObject, validateStoryIntelligence, validateSummary } from '../src/ai/schema.ts';
 import { instrumentedSummary } from '../src/ai/summary.ts';
 import type { Env } from '../src/types.ts';
 
@@ -95,4 +95,17 @@ test('uses the deterministic fallback when model output violates the schema', as
   assert.match(summary.whatHappened, /security update/);
   assert.match(summary.whyItMatters, /security exposure/);
   assert.equal(fixture.calls(), 1);
+});
+
+test('accepts grounded enrichment and rejects unsupported extracted evidence', () => {
+  const source = 'OpenAI launched Atlas in Louisiana for software developers.';
+  const value = {
+    eventType: 'launch', topics: ['ai'], entities: ['OpenAI', 'Atlas'], geographies: ['Louisiana'],
+    affectedAudiences: ['developers'], evidence: ['OpenAI launched Atlas'], actionability: 0.5,
+    novelty: 0.8, significance: 0.7, developerRelevance: 0.9, founderRelevance: 0.5,
+    louisianaRelevance: 0.8, confidence: 0.9
+  };
+  assert.equal(validateStoryIntelligence(value, source).value?.eventType, 'launch');
+  assert.match(validateStoryIntelligence({ ...value, entities: ['Invented Company'] }, source).error ?? '', /unsupported/);
+  assert.match(validateStoryIntelligence({ ...value, confidence: 1.2 }, source).error ?? '', /between 0 and 1/);
 });

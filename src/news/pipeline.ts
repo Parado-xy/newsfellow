@@ -136,7 +136,7 @@ export async function loadTopStories(
   audience: NewsAudience = 'personal',
   route?: DiscordRoute
 ): Promise<StoredStory[]> {
-  const result = await env.DB.prepare(`SELECT id, title, canonical_url, excerpt, publisher, published_at, topics_json, score, audiences_json,
+  const result = await env.DB.prepare(`SELECT id, source_id, title, canonical_url, excerpt, publisher, published_at, fingerprint, topics_json, score, audiences_json,
       opportunity_type, deadline_date, deadline_text, eligibility, opportunity_location, participation_mode,
       application_url, opportunity_confidence, is_rolling
     FROM stories WHERE published_at >= datetime('now', ?) AND audiences_json LIKE ?
@@ -153,4 +153,20 @@ export async function loadTopStories(
     if (unique.length === limit) break;
   }
   return unique;
+}
+
+export async function loadStoryCandidates(
+  env: Env,
+  limit: number,
+  windowHours: number,
+  audience: NewsAudience
+): Promise<StoredStory[]> {
+  const result = await env.DB.prepare(`SELECT id, source_id, title, canonical_url, excerpt, publisher, published_at, fingerprint, topics_json, score, audiences_json,
+      opportunity_type, deadline_date, deadline_text, eligibility, opportunity_location, participation_mode,
+      application_url, opportunity_confidence, is_rolling
+    FROM stories WHERE published_at >= datetime('now', ?) AND audiences_json LIKE ?
+      AND (opportunity_type IS NULL OR opportunity_type = 'news' OR deadline_date IS NULL OR deadline_date >= date('now'))
+    ORDER BY score DESC, published_at DESC LIMIT ?`)
+    .bind(`-${windowHours} hours`, `%\"${audience}\"%`, limit).all<StoredStory>();
+  return result.results;
 }

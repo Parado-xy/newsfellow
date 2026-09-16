@@ -36,6 +36,7 @@ export const discordFormatter: ChannelFormatter = {
       if (story.opportunity_location) fields.push(`**Location:** ${escapeDiscord(story.opportunity_location)}`);
       if (story.participation_mode) fields.push(`**Format:** ${escapeDiscord(story.participation_mode)}`);
       if (story.application_url) fields.push(`**Apply:** [Direct application](${story.application_url})`);
+      if ((story.cluster_source_count ?? 1) > 1) fields.push(`**Coverage:** ${story.cluster_source_count} reports`);
       const actionable = fields.length ? `\n\n${fields.join('\n')}` : '';
       return `**${labels(item, new Date())} • [${escapeDiscord(story.title)}](${story.canonical_url})**\n${escapeDiscord(summary.whatHappened)}${actionable}\n\n**Why it matters:** ${escapeDiscord(summary.whyItMatters)}\n*Source: ${escapeDiscord(story.publisher)}*`;
     });

@@ -97,6 +97,7 @@ export async function loadOperations(env: Env): Promise<OperationsContent> {
   const failed24h = await env.DB.prepare(`SELECT COUNT(*) AS count FROM deliveries
     WHERE status = 'failed' AND created_at >= datetime('now', '-24 hours')`).first<{ count: number }>();
   let aiHealth = 'No AI artifacts recorded';
+  let semanticHealth = 'No story intelligence recorded';
   try {
     const ai = await env.DB.prepare(`SELECT COUNT(*) AS total,
       SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successful,
@@ -110,6 +111,18 @@ export async function loadOperations(env: Env): Promise<OperationsContent> {
     console.warn(JSON.stringify({ event: 'ai_health_unavailable', error: String(error) }));
     aiHealth = 'Unavailable; apply the latest D1 migrations';
   }
+  try {
+    const semantic = await env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM story_intelligence WHERE enrichment_status = 'success') AS enriched,
+      (SELECT COUNT(*) FROM story_intelligence WHERE embedding_json IS NOT NULL) AS embedded,
+      (SELECT COUNT(*) FROM story_clusters) AS clusters,
+      (SELECT COUNT(*) FROM story_clusters WHERE source_count > 1) AS multi_source`)
+      .first<{ enriched: number; embedded: number; clusters: number; multi_source: number }>();
+    if (semantic) semanticHealth = `${semantic.enriched} enriched • ${semantic.embedded} embedded • ${semantic.clusters} clusters • ${semantic.multi_source} multi-source`;
+  } catch (error) {
+    console.warn(JSON.stringify({ event: 'semantic_health_unavailable', error: String(error) }));
+    semanticHealth = 'Unavailable; apply the latest D1 migrations';
+  }
 
   const collection = lastCollection
     ? `${lastCollection.status} • ${lastCollection.audience ?? 'all'} • ${lastCollection.sources_ok} OK/${lastCollection.sources_failed} failed/${lastCollection.sources_quarantined ?? 0} quarantined • ${lastCollection.completed_at ?? 'in progress'}`
@@ -122,6 +135,7 @@ export async function loadOperations(env: Env): Promise<OperationsContent> {
     delivery,
     failedDeliveries24h: failed24h?.count ?? 0,
     unhealthySources: unhealthy.results.map((source) => ({ name: source.source_name, failures: source.consecutive_failures })),
-    aiHealth
+    aiHealth,
+    semanticHealth
   };
 }

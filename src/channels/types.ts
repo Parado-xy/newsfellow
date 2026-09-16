@@ -38,6 +38,7 @@ export interface OperationsContent {
   failedDeliveries24h: number;
   unhealthySources: Array<{ name: string; failures: number }>;
   aiHealth: string;
+  semanticHealth: string;
 }
 
 export interface DeliveryStatusEvent {
