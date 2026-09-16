@@ -1,8 +1,6 @@
 import { SOURCES } from '../config/sources.ts';
 import type { DiscordRoute, Env, NewsAudience, Source, StoryCandidate, StoredStory } from '../types.ts';
 import { normalizeEntry, parseFeed } from './feed.ts';
-import { extractiveSummary, type Summarizer } from './summarize.ts';
-import { urgencyLabel } from './opportunity.ts';
 
 export interface CollectionReport {
   correlationId: string;
@@ -155,80 +153,4 @@ export async function loadTopStories(
     if (unique.length === limit) break;
   }
   return unique;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-export async function composeDigest(
-  stories: StoredStory[],
-  summarize: Summarizer = async (title, excerpt, topics) => extractiveSummary(title, excerpt, topics),
-  heading = 'TECH BRIEF'
-): Promise<string[]> {
-  if (!stories.length) return ['<b>NEWSFELLOW</b>\n\nNo material stories were found in the current source window.'];
-  const sections = await Promise.all(stories.map(async (story, index) => {
-    const topics = JSON.parse(story.topics_json) as string[];
-    const summary = await summarize(story.title, story.excerpt, topics);
-    return `<b>${index + 1}. <a href="${escapeHtml(story.canonical_url)}">${escapeHtml(story.title)}</a></b>\n${escapeHtml(summary.whatHappened)}\n\n<i>Why it matters:</i> ${escapeHtml(summary.whyItMatters)}\n<i>Source: ${escapeHtml(story.publisher)}</i>`;
-  }));
-  const chunks: string[] = [];
-  let current = `<b>NEWSFELLOW • ${escapeHtml(heading)}</b>\n\n`;
-  for (const section of sections) {
-    if ((current + section).length > 3900) { chunks.push(current.trim()); current = ''; }
-    current += `${section}\n\n`;
-  }
-  if (current.trim()) chunks.push(current.trim());
-  return chunks;
-}
-
-function escapeDiscord(value: string): string {
-  return value.replace(/([\\`*_{}\[\]()#+\-.!|>])/g, '\\$1');
-}
-
-function formatDeadline(value: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC'
-  }).format(new Date(`${value}T12:00:00Z`));
-}
-
-function flaLabels(story: StoredStory, topics: string[], now: Date): string {
-  const opportunity = story.opportunity_type && story.opportunity_type !== 'news'
-    ? story.opportunity_type.toUpperCase()
-    : undefined;
-  const urgency = urgencyLabel({ deadlineDate: story.deadline_date ?? undefined, rolling: Boolean(story.is_rolling) }, now);
-  const ageHours = (now.getTime() - Date.parse(story.published_at)) / 3_600_000;
-  const freshness = !urgency && ageHours >= 0 && ageHours <= 48 ? 'NEW' : undefined;
-  const labels = [urgency ?? freshness, opportunity];
-  if (topics.includes('louisiana')) labels.push('LOUISIANA');
-  return labels.filter(Boolean).join(' • ') || 'FOUNDER RADAR';
-}
-
-export async function composeDiscordDigest(
-  stories: StoredStory[],
-  summarize: Summarizer = async (title, excerpt, topics) => extractiveSummary(title, excerpt, topics),
-  heading = 'LOUISIANA STARTUP RADAR',
-  description = 'Useful news, opportunities, and ecosystem updates for Louisiana builders.'
-): Promise<string[]> {
-  if (!stories.length) return [];
-  const sections = await Promise.all(stories.map(async (story) => {
-    const topics = JSON.parse(story.topics_json) as string[];
-    const summary = await summarize(story.title, story.excerpt, topics);
-    const fields: string[] = [];
-    if (story.deadline_date) fields.push(`**Deadline:** ${formatDeadline(story.deadline_date)}`);
-    if (story.eligibility) fields.push(`**Eligibility:** ${escapeDiscord(story.eligibility)}`);
-    if (story.opportunity_location) fields.push(`**Location:** ${escapeDiscord(story.opportunity_location)}`);
-    if (story.participation_mode) fields.push(`**Format:** ${escapeDiscord(story.participation_mode)}`);
-    if (story.application_url) fields.push(`**Apply:** [Direct application](${story.application_url})`);
-    const actionable = fields.length ? `\n\n${fields.join('\n')}` : '';
-    return `**${flaLabels(story, topics, new Date())} • [${escapeDiscord(story.title)}](${story.canonical_url})**\n${escapeDiscord(summary.whatHappened)}${actionable}\n\n**Why it matters:** ${escapeDiscord(summary.whyItMatters)}\n*Source: ${escapeDiscord(story.publisher)}*`;
-  }));
-  const chunks: string[] = [];
-  let current = `**FOUNDERS LA • ${heading}**\n*${description}*\n\n`;
-  for (const section of sections) {
-    if ((current + section).length > 1900) { chunks.push(current.trim()); current = ''; }
-    current += `${section}\n\n`;
-  }
-  if (current.trim()) chunks.push(current.trim());
-  return chunks;
 }

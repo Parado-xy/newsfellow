@@ -1,10 +1,11 @@
+import type { ChannelId, OperationsContent } from './channels/types.ts';
 import type { Env, NewsAudience, StoredStory } from './types.ts';
 
 export interface DeliveryRequest {
   key: string;
   correlationId: string;
   audience: NewsAudience;
-  platform: 'telegram' | 'discord';
+  platform: ChannelId;
   period: string;
   stories: StoredStory[];
   messages: string[];
@@ -18,7 +19,7 @@ export function scheduledDeliveryKey(
   scheduledTime: number,
   timeZone: string,
   audience: NewsAudience,
-  platform: 'telegram' | 'discord',
+  platform: ChannelId,
   period: string
 ): string {
   const day = new Intl.DateTimeFormat('en-CA', {
@@ -83,7 +84,7 @@ export async function deliverOnce(
   }
 }
 
-export async function operationsReport(env: Env): Promise<string> {
+export async function loadOperations(env: Env): Promise<OperationsContent> {
   const lastCollection = await env.DB.prepare(`SELECT completed_at, audience, status, sources_ok,
     sources_failed, sources_quarantined, candidates, inserted, error FROM collection_runs ORDER BY id DESC LIMIT 1`)
     .first<Record<string, string | number | null>>();
@@ -102,8 +103,10 @@ export async function operationsReport(env: Env): Promise<string> {
   const delivery = lastDelivery
     ? `${lastDelivery.status} • ${lastDelivery.platform}/${lastDelivery.audience} ${lastDelivery.period} • ${lastDelivery.sent_count}/${lastDelivery.message_count} messages • ${lastDelivery.sent_at ?? 'not sent'}`
     : 'none recorded';
-  const sources = unhealthy.results.length
-    ? unhealthy.results.map((source) => `• ${source.source_name}: ${source.consecutive_failures} consecutive failure(s)`).join('\n')
-    : 'All tracked sources healthy';
-  return `<b>NewsFellow operations</b>\n\n<b>Last collection</b>\n${collection}\n\n<b>Last delivery</b>\n${delivery}\n\n<b>Failed deliveries, 24h</b>\n${failed24h?.count ?? 0}\n\n<b>Source health</b>\n${sources}`;
+  return {
+    collection,
+    delivery,
+    failedDeliveries24h: failed24h?.count ?? 0,
+    unhealthySources: unhealthy.results.map((source) => ({ name: source.source_name, failures: source.consecutive_failures }))
+  };
 }

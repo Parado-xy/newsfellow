@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { composeDigest, composeDiscordDigest, discordRoute } from '../src/news/pipeline.ts';
+import { discordRoute } from '../src/news/pipeline.ts';
+import { prepareDigest } from '../src/news/brief.ts';
+import { telegramFormatter } from '../src/channels/telegram.ts';
+import { discordFormatter } from '../src/channels/discord.ts';
+
+const composeDigest = async (stories: Parameters<typeof prepareDigest>[0], heading = 'TECH BRIEF') =>
+  telegramFormatter.digest(await prepareDigest(stories, undefined, heading));
+const composeDiscordDigest = async (stories: Parameters<typeof prepareDigest>[0]) =>
+  discordFormatter.digest(await prepareDigest(stories, undefined, 'LOUISIANA STARTUP RADAR',
+    'Useful news, opportunities, and ecosystem updates for Louisiana builders.'));
 
 const noOpportunity = {
   opportunity_type: 'news' as const, deadline_date: null, deadline_text: null, eligibility: null,
@@ -26,7 +35,7 @@ test('supports a labeled scheduled round-up', async () => {
     id: '1', title: 'Evening release', canonical_url: 'https://example.com/evening',
     excerpt: 'A company shipped a meaningful update for developers.', publisher: 'Example',
     published_at: '2026-09-07T22:00:00Z', topics_json: '["developer-infrastructure"]', score: 0.9, audiences_json: '["personal"]', ...noOpportunity
-  }], undefined, 'EVENING ROUND-UP');
+  }], 'EVENING ROUND-UP');
   assert.match(chunks[0], /NEWSFELLOW • EVENING ROUND-UP/);
 });
 
