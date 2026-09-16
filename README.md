@@ -1,8 +1,9 @@
 # NewsFellow
 
-NewsFellow is a shared news engine with two delivery profiles: a private Telegram technology companion and the Founders LA Discord startup radar.
+NewsFellow is a channel-agnostic news engine with private Telegram and WhatsApp technology companions plus the Founders LA Discord startup radar.
 
 - secure Telegram webhook with an owner chat allowlist;
+- signed WhatsApp Cloud API webhooks with an owner-phone allowlist, duplicate-event protection, and delivery-status tracking;
 - `/start`, `/status`, and on-demand `/brief` commands;
 - curated RSS/Atom collection;
 - URL normalization, exact deduplication, transparent relevance scoring;
@@ -27,10 +28,20 @@ NewsFellow is split into channel-neutral application services and channel adapte
 - `src/news/` owns collection, normalization, ranking, summarization, and semantic brief preparation.
 - `src/commands.ts` handles normalized commands and delegates authorization, formatting, and transport through injected channel contracts.
 - `src/channels/` owns inbound webhook normalization, platform formatting, API transport, retries, and message-size constraints.
-- `src/telegram.ts` and `src/discord.ts` are compatibility orchestration modules for the existing routes and schedules.
+- `src/telegram.ts`, `src/discord.ts`, and `src/whatsapp.ts` are thin orchestration modules for routes, schedules, and webhook lifecycles.
 - `src/reliability.ts` provides channel-neutral delivery idempotency, chunk recovery, and operational data.
 
-The channel contracts reserve normalized inbound commands, outbound transport, webhook delivery-status events, and platform formatters. A WhatsApp adapter can therefore be added without changing collection, ranking, summarization, brief generation, command dispatch, or delivery-ledger behavior. WhatsApp itself is intentionally not implemented in PR #6.
+The channel contracts expose normalized inbound commands, outbound transport receipts, webhook delivery-status events, and platform formatters. Telegram, Discord, and WhatsApp therefore share collection, ranking, summarization, brief generation, and command dispatch without leaking platform payloads into application services.
+
+### WhatsApp Cloud API
+
+The official Meta Cloud API integration exposes `GET` and `POST /whatsapp/webhook`. Subscription verification returns the exact `hub.challenge` only when the configured verify token matches. Event POSTs are verified against the raw request body using the `X-Hub-Signature-256` HMAC before JSON parsing. Messages for any other phone-number ID are ignored.
+
+Text, list-reply, and button-reply events normalize into the same commands used by Telegram. WhatsApp accepts commands with or without a leading slash: `brief`, `weekly`, `preferences`, `more <topic>`, `less <topic>`, `status`, and `report`. Unsupported media and event types are safely ignored. Each Meta message ID is claimed in D1 before dispatch; duplicate deliveries do not repeat a command. Outbound message IDs and `sent`, `delivered`, `read`, and `failed` status webhooks are retained in `channel_messages` for operational diagnosis.
+
+WhatsApp output uses its own markup, URL placement, and message-size limit. Cloud API sends retry boundedly on timeouts, rate limits, and server failures. One malformed or failed webhook event cannot prevent sibling events in the same payload from completing.
+
+This release replies only to owner-initiated conversations. Scheduled proactive WhatsApp round-ups are deliberately disabled: enable them in a later change only after configuring explicit opt-in and an approved utility template for delivery outside Meta's customer-service window. Telegram morning/evening delivery and Discord morning delivery remain unchanged.
 
 The primary summarizer is Cloudflare's hosted Llama 3.2 1B Instruct model, selected because it explicitly supports summarization and fits the free Workers AI allocation at personal usage. The `extractiveSummary` function remains a deterministic fallback when Workers AI is unavailable, over quota, disabled, or returns malformed output.
 
@@ -75,6 +86,11 @@ The private Telegram profile can be tuned with `/more <topic>` and `/less <topic
    - `npx wrangler secret put DISCORD_NEWS_WEBHOOK_URL`
    - `npx wrangler secret put DISCORD_OPPORTUNITIES_WEBHOOK_URL`
    - `npx wrangler secret put DISCORD_ADMIN_SECRET`
+   - `npx wrangler secret put WHATSAPP_ACCESS_TOKEN`
+   - `npx wrangler secret put WHATSAPP_PHONE_NUMBER_ID`
+   - `npx wrangler secret put WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+   - `npx wrangler secret put WHATSAPP_APP_SECRET`
+   - `npx wrangler secret put WHATSAPP_OWNER_PHONE`
    - optionally configure `AI_GATEWAY_ID` as a Worker variable after creating an AI Gateway
 6. Deploy with `npm run deploy`.
 7. Register the webhook:
@@ -86,6 +102,10 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 ```
 
 Do not commit `.dev.vars`, bot tokens, or chat IDs.
+
+For WhatsApp, add the WhatsApp product to a Meta app, provision a production business phone number, and use a system-user access token with the minimum required WhatsApp permissions. Enter `https://newsfellow.<YOUR_SUBDOMAIN>.workers.dev/whatsapp/webhook` as the callback URL, use the same random value stored in `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, subscribe the app to the `messages` webhook field, and store the allowed owner number in international digits-only form. `WHATSAPP_APP_SECRET` is the Meta app secret used exclusively for webhook signature verification. `WHATSAPP_API_VERSION` defaults to `v24.0` and should be updated deliberately as part of Meta API-version maintenance.
+
+Apply migration `0009_whatsapp_cloud_api.sql` before registering the webhook. It adds the inbound idempotency ledger and channel-message status history. Never log or commit access tokens, verify tokens, app secrets, complete webhook payloads, or message contents. Rotate a compromised value in Meta first, then replace the corresponding Worker secret.
 
 Workers AI is enabled through the `AI` binding in `wrangler.jsonc`; it does not require a separate model API key. Set `AI_SUMMARIZER_ENABLED` to `false` to force extractive-only mode.
 
@@ -111,7 +131,7 @@ Send a message to the bot, then temporarily inspect Telegram's `getUpdates` resp
 npm test
 ```
 
-The tests run on Node's built-in test runner and do not call the network.
+The tests run on Node's built-in test runner and do not call the network. WhatsApp coverage includes payload normalization, phone-number filtering, HMAC verification, subscription verification, platform formatting, Cloud API request shape, message-ID receipts, and transient retry behavior.
 
 ## Phase boundaries
 
@@ -123,4 +143,6 @@ Reliability foundation: delivery and chunk ledgers, stable scheduled-window keys
 
 Opportunity foundation: deterministic classification, conservative deadline parsing, eligibility and participation details, direct application-link detection, urgency ranking, and expired-opportunity filtering.
 
-Deferred to Phase 2+: event/calendar adapters, moderator approval queue, feedback signals, saved opportunities, and semantic clustering.
+WhatsApp foundation: official Cloud API text transport, verified and idempotent inbound webhooks, owner authorization, delivery-status persistence, isolated event processing, and platform-specific formatting. Proactive template delivery remains deferred.
+
+Deferred to Phase 2+: event/calendar adapters, moderator approval queue, saved opportunities, and proactive WhatsApp template delivery with opt-in management.

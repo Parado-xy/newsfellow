@@ -31,7 +31,7 @@ export function scheduledDeliveryKey(
 export async function deliverOnce(
   env: Env,
   request: DeliveryRequest,
-  send: (message: string) => Promise<void>
+  send: (message: string) => Promise<unknown>
 ): Promise<'sent' | 'already_sent' | 'in_progress'> {
   await env.DB.prepare(`INSERT OR IGNORE INTO deliveries
     (idempotency_key, correlation_id, audience, platform, period, story_ids_json, message_count)

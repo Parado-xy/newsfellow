@@ -3,6 +3,7 @@ import { scheduledPeriod } from './schedule.ts';
 import { handleTelegramUpdate, sendMonitoringAlert, sendScheduledRoundup } from './telegram.ts';
 import { sendFlaRoundup, testDiscordWebhook } from './discord.ts';
 import { correlationId, scheduledDeliveryKey } from './reliability.ts';
+import { handleWhatsAppWebhook, verifyWhatsAppChallenge } from './whatsapp.ts';
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { 'cache-control': 'no-store' } });
@@ -12,6 +13,8 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/health') return json({ ok: true, service: 'newsfellow' });
+    if (request.method === 'GET' && url.pathname === '/whatsapp/webhook') return verifyWhatsAppChallenge(url, env);
+    if (request.method === 'POST' && url.pathname === '/whatsapp/webhook') return handleWhatsAppWebhook(request, env, ctx);
     if (request.method === 'POST' && url.pathname === '/discord/test') {
       const authorization = request.headers.get('authorization');
       if (!env.DISCORD_ADMIN_SECRET || authorization !== `Bearer ${env.DISCORD_ADMIN_SECRET}`) return json({ error: 'unauthorized' }, 401);
