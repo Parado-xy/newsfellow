@@ -1,7 +1,8 @@
 import type { ChannelFormatter, ChannelTransport, InboundCommand } from './channels/types.ts';
 import type { Env } from './types.ts';
-import { buildBrief, loadStatus } from './news/service.ts';
+import { buildBrief, buildWeeklyBrief, loadStatus } from './news/service.ts';
 import { loadOperations } from './reliability.ts';
+import { adjustTopicPreference, loadPreferences } from './news/preferences.ts';
 
 export interface CommandContext {
   env: Env;
@@ -25,12 +26,27 @@ export async function handleCommand(command: InboundCommand, context: CommandCon
         await send(context.formatter.preparingBrief());
         for (const message of await buildBrief(context.env, context.formatter)) await send(message);
         break;
+      case 'weekly':
+        await send(context.formatter.preparingWeekly());
+        for (const message of await buildWeeklyBrief(context.env, context.formatter)) await send(message);
+        break;
       case 'report':
         await send(context.formatter.operations(await loadOperations(context.env)));
         break;
       case 'status':
         await send(context.formatter.status(await loadStatus(context.env)));
         break;
+      case 'preferences': {
+        const items = await loadPreferences(context.env, 'personal');
+        await send(context.formatter.preferences(items.map((item) => ({ value: item.value, weight: item.weight }))));
+        break;
+      }
+      case 'more':
+      case 'less': {
+        const preference = await adjustTopicPreference(context.env, 'personal', command.arguments.join(' '), command.command, command.channel);
+        await send(context.formatter.preferenceUpdated(preference.value, preference.weight));
+        break;
+      }
       default:
         await send(context.formatter.unknownCommand());
     }

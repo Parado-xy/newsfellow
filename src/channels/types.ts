@@ -2,7 +2,7 @@ import type { NewsAudience, StoredStory } from '../types.ts';
 import type { Summary } from '../news/summarize.ts';
 
 export type ChannelId = 'telegram' | 'discord' | 'whatsapp';
-export type CommandName = 'start' | 'brief' | 'status' | 'report' | 'unknown';
+export type CommandName = 'start' | 'brief' | 'weekly' | 'status' | 'report' | 'preferences' | 'more' | 'less' | 'unknown';
 
 export interface InboundCommand {
   channel: ChannelId;
@@ -10,6 +10,7 @@ export interface InboundCommand {
   sender: string;
   command: CommandName;
   rawCommand: string;
+  arguments: string[];
   eventId: string;
 }
 
@@ -39,6 +40,7 @@ export interface OperationsContent {
   unhealthySources: Array<{ name: string; failures: number }>;
   aiHealth: string;
   semanticHealth: string;
+  personalizationHealth: string;
 }
 
 export interface DeliveryStatusEvent {
@@ -64,6 +66,9 @@ export interface ChannelFormatter {
   start(): string;
   unknownCommand(): string;
   preparingBrief(): string;
+  preparingWeekly(): string;
+  preferences(items: Array<{ value: string; weight: number }>): string;
+  preferenceUpdated(value: string, weight: number): string;
   commandFailure(): string;
   monitoringAlert(title: string, detail: string, runId?: string): string;
 }

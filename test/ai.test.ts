@@ -10,6 +10,7 @@ import type { Env } from '../src/types.ts';
 function aiEnv(response: unknown) {
   const artifacts = new Map<string, string>();
   let calls = 0;
+  const inputs: unknown[][] = [];
   const DB = {
     prepare(sql: string) {
       return {
@@ -33,9 +34,9 @@ function aiEnv(response: unknown) {
     }
   };
   const AI = {
-    async run() { calls++; return response; }
+    async run(...args: unknown[]) { calls++; inputs.push(args); return response; }
   };
-  return { env: { DB, AI, AI_SUMMARIZER_ENABLED: 'true' } as unknown as Env, calls: () => calls, artifacts };
+  return { env: { DB, AI, AI_SUMMARIZER_ENABLED: 'true' } as unknown as Env, calls: () => calls, artifacts, inputs };
 }
 
 test('validates, bounds, and rejects malformed summary artifacts', () => {
@@ -108,4 +109,19 @@ test('accepts grounded enrichment and rejects unsupported extracted evidence', (
   assert.equal(validateStoryIntelligence(value, source).value?.eventType, 'launch');
   assert.match(validateStoryIntelligence({ ...value, entities: ['Invented Company'] }, source).error ?? '', /unsupported/);
   assert.match(validateStoryIntelligence({ ...value, confidence: 1.2 }, source).error ?? '', /between 0 and 1/);
+});
+
+test('uses the versioned cluster-synthesis prompt for multi-source context', async () => {
+  const fixture = aiEnv({ response: '{"whatHappened":"Two reports describe the same release.","whyItMatters":"Developers receive a new capability."}' });
+  const summary = await instrumentedSummary(fixture.env, 100)('Release', 'Canonical report text.', ['ai'], {
+    subjectId: 'cluster:1',
+    clusterContext: [
+      { title: 'Release announced', publisher: 'Official', excerpt: 'The company released a capability.' },
+      { title: 'Coverage of release', publisher: 'News', excerpt: 'The publication covered the capability.' }
+    ]
+  });
+  const input = fixture.inputs[0][1] as { messages: Array<{ content: string }> };
+  assert.match(input.messages[0].content, /Synthesize only the supplied reports/);
+  assert.match(input.messages[1].content, /REPORT 2/);
+  assert.match(summary.whatHappened, /Two reports/);
 });

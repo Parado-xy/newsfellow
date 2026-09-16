@@ -1,5 +1,5 @@
 export interface PromptDefinition {
-  operation: 'story_summary' | 'story_enrichment';
+  operation: 'story_summary' | 'cluster_synthesis' | 'story_enrichment';
   version: string;
   schemaVersion: string;
   system: string;
@@ -35,6 +35,28 @@ export const STORY_SUMMARY_PROMPT: PromptDefinition = {
   ].join(' ')
 };
 
+export const CLUSTER_SYNTHESIS_PROMPT: PromptDefinition = {
+  operation: 'cluster_synthesis',
+  version: 'cluster-synthesis-v1',
+  schemaVersion: 'summary-v1',
+  system: [
+    'Synthesize only the supplied reports about one news event.',
+    'Prefer facts supported by multiple reports and clearly qualify claims present in only one report.',
+    'Never invent facts, dates, names, numbers, quotes, consensus, or disagreement.',
+    'Do not mention a source unless it is supplied.',
+    'Return only JSON with exactly two string fields: whatHappened and whyItMatters.'
+  ].join(' ')
+};
+
 export function storySummaryUserPrompt(title: string, excerpt: string, topics: string[]): string {
   return `Title: ${title}\nTopics: ${topics.join(', ')}\nSource text: ${excerpt.slice(0, 2400)}\n\nWrite whatHappened in at most 2 sentences and whyItMatters in 1 cautious sentence.`;
+}
+
+export function clusterSynthesisUserPrompt(
+  topics: string[],
+  reports: Array<{ title: string; publisher: string; excerpt: string }>
+): string {
+  const sources = reports.map((report, index) =>
+    `REPORT ${index + 1}\nPublisher: ${report.publisher}\nTitle: ${report.title}\nText: ${report.excerpt}`).join('\n\n');
+  return `Topics: ${topics.join(', ')}\n\n${sources}\n\nSynthesize what happened in at most 2 sentences and why it matters in 1 cautious sentence.`;
 }

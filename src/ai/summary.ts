@@ -2,7 +2,7 @@ import type { Env } from '../types.ts';
 import { extractiveSummary, type Summarizer, type Summary } from '../news/summarize.ts';
 import { hashInput, readCachedArtifact, writeArtifact } from './artifacts.ts';
 import { modelFor } from './models.ts';
-import { STORY_SUMMARY_PROMPT, storySummaryUserPrompt } from './prompts.ts';
+import { CLUSTER_SYNTHESIS_PROMPT, STORY_SUMMARY_PROMPT, clusterSynthesisUserPrompt, storySummaryUserPrompt } from './prompts.ts';
 import { parseJsonObject, validateSummary } from './schema.ts';
 
 interface TokenUsage {
@@ -54,13 +54,18 @@ export function instrumentedSummary(env: Env, timeoutMs = 8_000): Summarizer {
     const fallback = extractiveSummary(title, excerpt, topics);
     if (!excerpt.trim()) return fallback;
 
-    const model = modelFor(env, 'story_summary');
-    const inputHash = await hashInput({ title, excerpt: excerpt.slice(0, 2400), topics });
+    const isCluster = (context?.clusterContext?.length ?? 0) > 1;
+    const prompt = isCluster ? CLUSTER_SYNTHESIS_PROMPT : STORY_SUMMARY_PROMPT;
+    const model = modelFor(env, prompt.operation);
+    const boundedReports = context?.clusterContext?.slice(0, 5).map((report) => ({
+      title: report.title, publisher: report.publisher, excerpt: report.excerpt.slice(0, 1200)
+    }));
+    const inputHash = await hashInput(isCluster ? { topics, reports: boundedReports } : { title, excerpt: excerpt.slice(0, 2400), topics });
     const key = {
-      operation: STORY_SUMMARY_PROMPT.operation,
+      operation: prompt.operation,
       inputHash,
-      promptVersion: STORY_SUMMARY_PROMPT.version,
-      schemaVersion: STORY_SUMMARY_PROMPT.schemaVersion,
+      promptVersion: prompt.version,
+      schemaVersion: prompt.schemaVersion,
       model
     } as const;
     const cached = await cacheRead(env, key);
@@ -82,13 +87,15 @@ export function instrumentedSummary(env: Env, timeoutMs = 8_000): Summarizer {
       } : undefined;
       const result = await env.AI.run(model, {
         messages: [
-          { role: 'system', content: STORY_SUMMARY_PROMPT.system },
-          { role: 'user', content: storySummaryUserPrompt(title, excerpt, topics) }
+          { role: 'system', content: prompt.system },
+          { role: 'user', content: isCluster
+            ? clusterSynthesisUserPrompt(topics, boundedReports ?? [])
+            : storySummaryUserPrompt(title, excerpt, topics) }
         ],
         max_tokens: 260,
         temperature: 0.1,
         response_format: { type: 'json_object' }
-      }, { signal: abort.signal, tags: ['newsfellow', 'story-summary', key.promptVersion], gateway });
+      }, { signal: abort.signal, tags: ['newsfellow', isCluster ? 'cluster-synthesis' : 'story-summary', key.promptVersion], gateway });
       const parsed = parseJsonObject(responseText(result));
       const validated = parsed.value === undefined ? { error: parsed.error } : validateSummary(parsed.value);
       const latencyMs = Date.now() - started;

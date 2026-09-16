@@ -7,7 +7,7 @@ import type { Env } from '../src/types.ts';
 test('rejects unauthorized normalized commands without invoking the transport', async () => {
   const sent: string[] = [];
   await handleCommand({
-    channel: 'telegram', destination: '2', sender: '2', command: 'brief', rawCommand: '/brief', eventId: '9'
+    channel: 'telegram', destination: '2', sender: '2', command: 'brief', rawCommand: '/brief', arguments: [], eventId: '9'
   }, {
     env: {} as Env,
     formatter: telegramFormatter,
@@ -25,8 +25,8 @@ test('handles channel-independent start and unknown commands through injected ad
     transport: { id: 'telegram' as const, send: async (_destination: string, message: string) => { sent.push(message); } },
     authorize: () => true
   };
-  await handleCommand({ channel: 'telegram', destination: '1', sender: '1', command: 'start', rawCommand: '/start', eventId: '1' }, context);
-  await handleCommand({ channel: 'telegram', destination: '1', sender: '1', command: 'unknown', rawCommand: '/wat', eventId: '2' }, context);
+  await handleCommand({ channel: 'telegram', destination: '1', sender: '1', command: 'start', rawCommand: '/start', arguments: [], eventId: '1' }, context);
+  await handleCommand({ channel: 'telegram', destination: '1', sender: '1', command: 'unknown', rawCommand: '/wat', arguments: [], eventId: '2' }, context);
   assert.match(sent[0], /NewsFellow is ready/);
-  assert.equal(sent[1], 'Available commands: /brief, /status, /report');
+  assert.match(sent[1], /\/weekly/);
 });

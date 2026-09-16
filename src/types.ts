@@ -6,8 +6,10 @@ export interface Env {
   TELEGRAM_OWNER_CHAT_ID: string;
   OWNER_TIMEZONE?: string;
   MAX_DIGEST_STORIES?: string;
+  WEEKLY_MAX_DIGEST_STORIES?: string;
   AI_SUMMARIZER_ENABLED?: string;
   AI_SUMMARY_MODEL?: string;
+  AI_SYNTHESIS_MODEL?: string;
   AI_ENRICHMENT_MODEL?: string;
   AI_EMBEDDING_MODEL?: string;
   AI_ENRICHMENT_ENABLED?: string;
@@ -94,6 +96,8 @@ export interface StoredStory {
   cluster_id?: string | null;
   cluster_source_count?: number;
   cluster_match_method?: string | null;
+  ranking_explanation?: string[];
+  cluster_context?: Array<{ title: string; publisher: string; excerpt: string; url: string }>;
 }
 
 export type StoryEventType = 'launch' | 'funding' | 'acquisition' | 'policy' | 'security' | 'research' | 'opportunity' | 'event' | 'other';
