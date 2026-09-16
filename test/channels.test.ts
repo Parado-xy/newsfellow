@@ -23,7 +23,7 @@ test('keeps Telegram-specific status and operations markup in the formatter', ()
   assert.match(status, /Stored stories: 12/);
   const operations = telegramFormatter.operations({
     collection: 'success', delivery: 'sent', failedDeliveries24h: 0,
-    unhealthySources: [{ name: 'A <feed>', failures: 2 }]
+    unhealthySources: [{ name: 'A <feed>', failures: 2 }], aiHealth: '4/5 successful'
   });
   assert.match(operations, /A &lt;feed&gt;/);
 });
