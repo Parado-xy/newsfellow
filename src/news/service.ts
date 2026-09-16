@@ -2,10 +2,10 @@ import type { ChannelFormatter, StatusContent } from '../channels/types.ts';
 import type { DiscordRoute, Env, NewsAudience } from '../types.ts';
 import { collectNews, loadTopStories } from './pipeline.ts';
 import { prepareDigest } from './brief.ts';
-import { withTimeout, workersAiSummarizer } from './summarize.ts';
+import { instrumentedSummary } from '../ai/summary.ts';
 
 function summarizer(env: Env) {
-  return env.AI_SUMMARIZER_ENABLED === 'true' ? withTimeout(workersAiSummarizer(env.AI), 8_000) : undefined;
+  return env.AI_SUMMARIZER_ENABLED === 'true' ? instrumentedSummary(env, 8_000) : undefined;
 }
 
 export async function buildBrief(env: Env, formatter: ChannelFormatter): Promise<string[]> {

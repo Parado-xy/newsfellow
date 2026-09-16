@@ -5,7 +5,12 @@ export interface Summary {
   whyItMatters: string;
 }
 
-export type Summarizer = (title: string, excerpt: string, topics: string[]) => Promise<Summary>;
+export interface SummaryContext {
+  subjectId?: string;
+  correlationId?: string;
+}
+
+export type Summarizer = (title: string, excerpt: string, topics: string[], context?: SummaryContext) => Promise<Summary>;
 
 function clamp(text: string, max = 320): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
@@ -89,12 +94,12 @@ export function workersAiSummarizer(ai: Ai): Summarizer {
 }
 
 export function withTimeout(summarize: Summarizer, timeoutMs = 6_000): Summarizer {
-  return async (title, excerpt, topics) => {
+  return async (title, excerpt, topics, context) => {
     const fallback = extractiveSummary(title, excerpt, topics);
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([
-        summarize(title, excerpt, topics),
+        summarize(title, excerpt, topics, context),
         new Promise<Summary>((resolve) => { timeout = setTimeout(() => resolve(fallback), timeoutMs); })
       ]);
     } finally {

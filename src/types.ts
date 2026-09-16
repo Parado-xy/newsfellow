@@ -7,6 +7,9 @@ export interface Env {
   OWNER_TIMEZONE?: string;
   MAX_DIGEST_STORIES?: string;
   AI_SUMMARIZER_ENABLED?: string;
+  AI_SUMMARY_MODEL?: string;
+  AI_GATEWAY_ID?: string;
+  AI_GATEWAY_CACHE_TTL_SECONDS?: string;
   DISCORD_NEWS_WEBHOOK_URL?: string;
   DISCORD_OPPORTUNITIES_WEBHOOK_URL?: string;
   DISCORD_ADMIN_SECRET?: string;

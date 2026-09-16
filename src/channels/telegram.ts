@@ -28,7 +28,7 @@ export const telegramFormatter: ChannelFormatter = {
     const sources = content.unhealthySources.length
       ? content.unhealthySources.map((source) => `• ${escapeHtml(source.name)}: ${source.failures} consecutive failure(s)`).join('\n')
       : 'All tracked sources healthy';
-    return `<b>NewsFellow operations</b>\n\n<b>Last collection</b>\n${escapeHtml(content.collection)}\n\n<b>Last delivery</b>\n${escapeHtml(content.delivery)}\n\n<b>Failed deliveries, 24h</b>\n${content.failedDeliveries24h}\n\n<b>Source health</b>\n${sources}`;
+    return `<b>NewsFellow operations</b>\n\n<b>Last collection</b>\n${escapeHtml(content.collection)}\n\n<b>Last delivery</b>\n${escapeHtml(content.delivery)}\n\n<b>Failed deliveries, 24h</b>\n${content.failedDeliveries24h}\n\n<b>AI health, 24h</b>\n${escapeHtml(content.aiHealth)}\n\n<b>Source health</b>\n${sources}`;
   },
   collectionFooter: (sourcesOk, inserted) => `<i>${sourcesOk} sources checked • ${inserted} new stories</i>`,
   start: () => '<b>NewsFellow is ready.</b>\n\nUse /brief for news, /status for a quick health check, or /report for the operations report. Morning and evening round-ups are delivered automatically.',

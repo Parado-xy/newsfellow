@@ -15,7 +15,7 @@ export async function prepareDigest(
     emptyMessage,
     stories: await Promise.all(stories.map(async (story) => ({
       story,
-      summary: await summarize(story.title, story.excerpt, JSON.parse(story.topics_json) as string[])
+      summary: await summarize(story.title, story.excerpt, JSON.parse(story.topics_json) as string[], { subjectId: story.id })
     })))
   };
 }

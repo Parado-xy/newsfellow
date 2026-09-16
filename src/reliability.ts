@@ -96,6 +96,20 @@ export async function loadOperations(env: Env): Promise<OperationsContent> {
     .all<{ source_name: string; consecutive_failures: number; last_error: string | null }>();
   const failed24h = await env.DB.prepare(`SELECT COUNT(*) AS count FROM deliveries
     WHERE status = 'failed' AND created_at >= datetime('now', '-24 hours')`).first<{ count: number }>();
+  let aiHealth = 'No AI artifacts recorded';
+  try {
+    const ai = await env.DB.prepare(`SELECT COUNT(*) AS total,
+      SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successful,
+      SUM(CASE WHEN fallback_used = 1 THEN 1 ELSE 0 END) AS fallbacks,
+      ROUND(AVG(latency_ms)) AS average_latency_ms,
+      SUM(COALESCE(total_tokens, 0)) AS total_tokens
+      FROM ai_artifacts WHERE created_at >= datetime('now', '-24 hours')`)
+      .first<{ total: number; successful: number; fallbacks: number; average_latency_ms: number | null; total_tokens: number }>();
+    if (ai?.total) aiHealth = `${ai.successful ?? 0}/${ai.total} successful • ${ai.fallbacks ?? 0} fallbacks • ${ai.average_latency_ms ?? 0} ms average • ${ai.total_tokens ?? 0} tokens`;
+  } catch (error) {
+    console.warn(JSON.stringify({ event: 'ai_health_unavailable', error: String(error) }));
+    aiHealth = 'Unavailable; apply the latest D1 migrations';
+  }
 
   const collection = lastCollection
     ? `${lastCollection.status} • ${lastCollection.audience ?? 'all'} • ${lastCollection.sources_ok} OK/${lastCollection.sources_failed} failed/${lastCollection.sources_quarantined ?? 0} quarantined • ${lastCollection.completed_at ?? 'in progress'}`
@@ -107,6 +121,7 @@ export async function loadOperations(env: Env): Promise<OperationsContent> {
     collection,
     delivery,
     failedDeliveries24h: failed24h?.count ?? 0,
-    unhealthySources: unhealthy.results.map((source) => ({ name: source.source_name, failures: source.consecutive_failures }))
+    unhealthySources: unhealthy.results.map((source) => ({ name: source.source_name, failures: source.consecutive_failures })),
+    aiHealth
   };
 }

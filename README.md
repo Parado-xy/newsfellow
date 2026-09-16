@@ -9,6 +9,7 @@ NewsFellow is a shared news engine with two delivery profiles: a private Telegra
 - Workers AI summaries using `@cf/meta/llama-3.2-1b-instruct`, with automatic zero-cost extractive fallback;
 - Cloudflare D1 persistence, batched writes, and automatic morning/evening round-ups;
 - offline unit tests with no paid API dependency.
+- versioned and schema-validated AI summaries with content-addressed D1 caching, artifact history, telemetry, and deterministic fallback;
 - a Louisiana-first FLA source profile and Discord webhook delivery with rate-limit retries;
 - audience-aware storage so personal technology stories do not leak into the community feed.
 - delivery-window and per-message idempotency with a D1 delivery ledger;
@@ -33,6 +34,16 @@ The channel contracts reserve normalized inbound commands, outbound transport, w
 
 The primary summarizer is Cloudflare's hosted Llama 3.2 1B Instruct model, selected because it explicitly supports summarization and fits the free Workers AI allocation at personal usage. The `extractiveSummary` function remains a deterministic fallback when Workers AI is unavailable, over quota, disabled, or returns malformed output.
 
+### AI intelligence foundation
+
+AI inference is routed through `src/ai/` rather than called from channel or news-delivery code. Each operation has an explicit prompt version, output schema version, and configurable model. A SHA-256 hash of the bounded source input provides the cache identity. Successful results are reused only when the input, prompt, schema, and model all match.
+
+The `ai_artifacts` ledger records output, validation state, fallback use, latency, token usage, model, versions, and an optional correlation ID. Invalid output, timeouts, provider errors, and artifact-ledger failures are isolated; digest delivery retains the deterministic extractive fallback. `/report` includes 24-hour inference success, fallback, latency, and token totals.
+
+Set `AI_SUMMARY_MODEL` to change the summary model without changing code. Optionally set `AI_GATEWAY_ID` to route inference through Cloudflare AI Gateway with request logging, retries, gateway caching, cost analytics, and NewsFellow metadata. `AI_GATEWAY_CACHE_TTL_SECONDS` defaults to one day. The D1 artifact cache remains authoritative even when Gateway caching is disabled.
+
+Prompt or schema changes must receive a new version identifier so old artifacts cannot be silently reused. `npm run test:eval` runs deterministic offline quality gates; these fixtures should grow alongside new prompts and AI operations.
+
 ## Prerequisites
 
 - Node.js 22+
@@ -52,6 +63,7 @@ The primary summarizer is Cloudflare's hosted Llama 3.2 1B Instruct model, selec
    - `npx wrangler secret put DISCORD_NEWS_WEBHOOK_URL`
    - `npx wrangler secret put DISCORD_OPPORTUNITIES_WEBHOOK_URL`
    - `npx wrangler secret put DISCORD_ADMIN_SECRET`
+   - optionally configure `AI_GATEWAY_ID` as a Worker variable after creating an AI Gateway
 6. Deploy with `npm run deploy`.
 7. Register the webhook:
 
