@@ -10,8 +10,10 @@ export const telegramFormatter: ChannelFormatter = {
     if (!content.stories.length) {
       return [content.emptyMessage ?? '<b>NEWSFELLOW</b>\n\nNo material stories were found in the current source window.'];
     }
-    const sections = content.stories.map(({ story, summary }, index) =>
-      `<b>${index + 1}. <a href="${escapeHtml(story.canonical_url)}">${escapeHtml(story.title)}</a></b>\n${escapeHtml(summary.whatHappened)}\n\n<i>Why it matters:</i> ${escapeHtml(summary.whyItMatters)}\n<i>Source: ${escapeHtml(story.publisher)}</i>`);
+    const sections = content.stories.map(({ story, summary }, index) => {
+      const coverage = (story.cluster_source_count ?? 1) > 1 ? ` • ${story.cluster_source_count} reports` : '';
+      return `<b>${index + 1}. <a href="${escapeHtml(story.canonical_url)}">${escapeHtml(story.title)}</a></b>\n${escapeHtml(summary.whatHappened)}\n\n<i>Why it matters:</i> ${escapeHtml(summary.whyItMatters)}\n<i>Source: ${escapeHtml(story.publisher)}${coverage}</i>`;
+    });
     const chunks: string[] = [];
     let current = `<b>NEWSFELLOW • ${escapeHtml(content.heading)}</b>\n\n`;
     for (const section of sections) {
@@ -28,7 +30,7 @@ export const telegramFormatter: ChannelFormatter = {
     const sources = content.unhealthySources.length
       ? content.unhealthySources.map((source) => `• ${escapeHtml(source.name)}: ${source.failures} consecutive failure(s)`).join('\n')
       : 'All tracked sources healthy';
-    return `<b>NewsFellow operations</b>\n\n<b>Last collection</b>\n${escapeHtml(content.collection)}\n\n<b>Last delivery</b>\n${escapeHtml(content.delivery)}\n\n<b>Failed deliveries, 24h</b>\n${content.failedDeliveries24h}\n\n<b>AI health, 24h</b>\n${escapeHtml(content.aiHealth)}\n\n<b>Source health</b>\n${sources}`;
+    return `<b>NewsFellow operations</b>\n\n<b>Last collection</b>\n${escapeHtml(content.collection)}\n\n<b>Last delivery</b>\n${escapeHtml(content.delivery)}\n\n<b>Failed deliveries, 24h</b>\n${content.failedDeliveries24h}\n\n<b>AI health, 24h</b>\n${escapeHtml(content.aiHealth)}\n\n<b>Semantic index</b>\n${escapeHtml(content.semanticHealth)}\n\n<b>Source health</b>\n${sources}`;
   },
   collectionFooter: (sourcesOk, inserted) => `<i>${sourcesOk} sources checked • ${inserted} new stories</i>`,
   start: () => '<b>NewsFellow is ready.</b>\n\nUse /brief for news, /status for a quick health check, or /report for the operations report. Morning and evening round-ups are delivered automatically.',

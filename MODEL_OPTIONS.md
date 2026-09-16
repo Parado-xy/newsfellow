@@ -6,6 +6,8 @@ Use Cloudflare Workers AI `@cf/meta/llama-3.2-1b-instruct` as the primary summar
 
 Source: https://developers.cloudflare.com/workers-ai/models/llama-3.2-1b-instruct/
 
+Structured story enrichment uses `@cf/meta/llama-3.2-3b-instruct`, while semantic clustering uses `@cf/baai/bge-small-en-v1.5` embeddings. Both are configurable with `AI_ENRICHMENT_MODEL` and `AI_EMBEDDING_MODEL`. Model output remains advisory: strict schemas, source-evidence checks, and deterministic clustering thresholds control what reaches storage and delivery.
+
 ## Models evaluated
 
 ### Cloudflare Workers AI BART Large CNN

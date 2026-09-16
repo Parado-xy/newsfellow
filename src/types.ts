@@ -8,6 +8,9 @@ export interface Env {
   MAX_DIGEST_STORIES?: string;
   AI_SUMMARIZER_ENABLED?: string;
   AI_SUMMARY_MODEL?: string;
+  AI_ENRICHMENT_MODEL?: string;
+  AI_EMBEDDING_MODEL?: string;
+  AI_ENRICHMENT_ENABLED?: string;
   AI_GATEWAY_ID?: string;
   AI_GATEWAY_CACHE_TTL_SECONDS?: string;
   DISCORD_NEWS_WEBHOOK_URL?: string;
@@ -69,12 +72,14 @@ export interface StoryCandidate extends FeedEntry {
 
 export interface StoredStory {
   id: string;
+  source_id?: string;
   title: string;
   canonical_url: string;
   excerpt: string;
   publisher: string;
   published_at: string;
   topics_json: string;
+  fingerprint?: string;
   score: number;
   audiences_json: string;
   opportunity_type: OpportunityType | null;
@@ -86,6 +91,27 @@ export interface StoredStory {
   application_url: string | null;
   opportunity_confidence: number;
   is_rolling: number;
+  cluster_id?: string | null;
+  cluster_source_count?: number;
+  cluster_match_method?: string | null;
+}
+
+export type StoryEventType = 'launch' | 'funding' | 'acquisition' | 'policy' | 'security' | 'research' | 'opportunity' | 'event' | 'other';
+
+export interface StoryIntelligence {
+  eventType: StoryEventType;
+  topics: string[];
+  entities: string[];
+  geographies: string[];
+  affectedAudiences: string[];
+  evidence: string[];
+  actionability: number;
+  novelty: number;
+  significance: number;
+  developerRelevance: number;
+  founderRelevance: number;
+  louisianaRelevance: number;
+  confidence: number;
 }
 
 export interface TelegramUpdate {

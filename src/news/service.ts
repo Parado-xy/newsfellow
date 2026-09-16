@@ -1,6 +1,7 @@
 import type { ChannelFormatter, StatusContent } from '../channels/types.ts';
 import type { DiscordRoute, Env, NewsAudience } from '../types.ts';
-import { collectNews, loadTopStories } from './pipeline.ts';
+import { collectNews } from './pipeline.ts';
+import { loadClusteredTopStories } from './clustering.ts';
 import { prepareDigest } from './brief.ts';
 import { instrumentedSummary } from '../ai/summary.ts';
 
@@ -11,14 +12,14 @@ function summarizer(env: Env) {
 export async function buildBrief(env: Env, formatter: ChannelFormatter): Promise<string[]> {
   await collectNews(env, 'personal');
   const limit = Math.min(10, Math.max(3, Number(env.MAX_DIGEST_STORIES ?? 6)));
-  const stories = await loadTopStories(env, limit, 48, 'personal');
+  const stories = await loadClusteredTopStories(env, limit, 48, 'personal');
   return formatter.digest(await prepareDigest(stories, summarizer(env)));
 }
 
 export async function buildPersonalRoundup(env: Env, formatter: ChannelFormatter, period: 'morning' | 'evening', runId: string) {
   const report = await collectNews(env, 'personal', runId);
   const limit = Math.min(10, Math.max(3, Number(env.MAX_DIGEST_STORIES ?? 6)));
-  const stories = await loadTopStories(env, limit, 14, 'personal');
+  const stories = await loadClusteredTopStories(env, limit, 14, 'personal');
   const heading = period === 'morning' ? 'MORNING ROUND-UP' : 'EVENING ROUND-UP';
   const messages = formatter.digest(await prepareDigest(stories, summarizer(env), heading));
   messages.push(formatter.collectionFooter(report.sourcesOk, report.inserted));
@@ -27,7 +28,7 @@ export async function buildPersonalRoundup(env: Env, formatter: ChannelFormatter
 
 export async function buildFlaRoundup(env: Env, formatter: ChannelFormatter, route: DiscordRoute) {
   const limit = Math.min(10, Math.max(3, Number(env.FLA_MAX_DIGEST_STORIES ?? 6)));
-  const stories = await loadTopStories(env, limit, 48, 'fla', route);
+  const stories = await loadClusteredTopStories(env, limit, 48, 'fla', route);
   const heading = route === 'opportunities' ? 'FOUNDER OPPORTUNITIES' : 'LOUISIANA STARTUP RADAR';
   const description = route === 'opportunities'
     ? 'Verified programs, funding, competitions, and events for Louisiana founders.'
