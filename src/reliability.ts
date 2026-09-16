@@ -98,6 +98,7 @@ export async function loadOperations(env: Env): Promise<OperationsContent> {
     WHERE status = 'failed' AND created_at >= datetime('now', '-24 hours')`).first<{ count: number }>();
   let aiHealth = 'No AI artifacts recorded';
   let semanticHealth = 'No story intelligence recorded';
+  let personalizationHealth = 'No ranking decisions recorded';
   try {
     const ai = await env.DB.prepare(`SELECT COUNT(*) AS total,
       SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successful,
@@ -110,6 +111,17 @@ export async function loadOperations(env: Env): Promise<OperationsContent> {
   } catch (error) {
     console.warn(JSON.stringify({ event: 'ai_health_unavailable', error: String(error) }));
     aiHealth = 'Unavailable; apply the latest D1 migrations';
+  }
+  try {
+    const personalization = await env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM audience_preferences) AS preferences,
+      (SELECT COUNT(*) FROM story_feedback WHERE created_at >= datetime('now', '-30 days')) AS feedback,
+      (SELECT COUNT(*) FROM ranking_decisions WHERE created_at >= datetime('now', '-24 hours')) AS decisions`)
+      .first<{ preferences: number; feedback: number; decisions: number }>();
+    if (personalization) personalizationHealth = `${personalization.preferences} preferences • ${personalization.feedback} feedback signals, 30d • ${personalization.decisions} decisions, 24h`;
+  } catch (error) {
+    console.warn(JSON.stringify({ event: 'personalization_health_unavailable', error: String(error) }));
+    personalizationHealth = 'Unavailable; apply the latest D1 migrations';
   }
   try {
     const semantic = await env.DB.prepare(`SELECT
@@ -136,6 +148,7 @@ export async function loadOperations(env: Env): Promise<OperationsContent> {
     failedDeliveries24h: failed24h?.count ?? 0,
     unhealthySources: unhealthy.results.map((source) => ({ name: source.source_name, failures: source.consecutive_failures })),
     aiHealth,
-    semanticHealth
+    semanticHealth,
+    personalizationHealth
   };
 }

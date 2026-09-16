@@ -16,10 +16,18 @@ export async function buildBrief(env: Env, formatter: ChannelFormatter): Promise
   return formatter.digest(await prepareDigest(stories, summarizer(env)));
 }
 
+export async function buildWeeklyBrief(env: Env, formatter: ChannelFormatter): Promise<string[]> {
+  await collectNews(env, 'personal');
+  const limit = Math.min(12, Math.max(5, Number(env.WEEKLY_MAX_DIGEST_STORIES ?? 8)));
+  const stories = await loadClusteredTopStories(env, limit, 168, 'personal', undefined, 'weekly');
+  return formatter.digest(await prepareDigest(stories, summarizer(env), 'WEEKLY SYNTHESIS',
+    'The strongest developments from the past seven days, consolidated across reporting.'));
+}
+
 export async function buildPersonalRoundup(env: Env, formatter: ChannelFormatter, period: 'morning' | 'evening', runId: string) {
   const report = await collectNews(env, 'personal', runId);
   const limit = Math.min(10, Math.max(3, Number(env.MAX_DIGEST_STORIES ?? 6)));
-  const stories = await loadClusteredTopStories(env, limit, 14, 'personal');
+  const stories = await loadClusteredTopStories(env, limit, 14, 'personal', undefined, period);
   const heading = period === 'morning' ? 'MORNING ROUND-UP' : 'EVENING ROUND-UP';
   const messages = formatter.digest(await prepareDigest(stories, summarizer(env), heading));
   messages.push(formatter.collectionFooter(report.sourcesOk, report.inserted));
@@ -28,7 +36,7 @@ export async function buildPersonalRoundup(env: Env, formatter: ChannelFormatter
 
 export async function buildFlaRoundup(env: Env, formatter: ChannelFormatter, route: DiscordRoute) {
   const limit = Math.min(10, Math.max(3, Number(env.FLA_MAX_DIGEST_STORIES ?? 6)));
-  const stories = await loadClusteredTopStories(env, limit, 48, 'fla', route);
+  const stories = await loadClusteredTopStories(env, limit, 48, 'fla', route, `fla:${route}`);
   const heading = route === 'opportunities' ? 'FOUNDER OPPORTUNITIES' : 'LOUISIANA STARTUP RADAR';
   const description = route === 'opportunities'
     ? 'Verified programs, funding, competitions, and events for Louisiana founders.'
@@ -47,7 +55,7 @@ export async function loadStatus(env: Env): Promise<StatusContent> {
       ? `${lastCollection.completed_at} (${lastCollection.sources_ok} sources OK, ${lastCollection.sources_failed} failed, ${lastCollection.sources_quarantined ?? 0} quarantined, ${lastCollection.inserted} new)`
       : 'No completed collection recorded',
     summarizationMode: env.AI_SUMMARIZER_ENABLED === 'true' ? 'Workers AI with extractive fallback' : 'extractive summaries',
-    roundups: 'morning and evening'
+    roundups: 'morning, evening, and weekly on demand'
   };
 }
 

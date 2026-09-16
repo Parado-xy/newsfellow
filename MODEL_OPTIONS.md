@@ -8,6 +8,8 @@ Source: https://developers.cloudflare.com/workers-ai/models/llama-3.2-1b-instruc
 
 Structured story enrichment uses `@cf/meta/llama-3.2-3b-instruct`, while semantic clustering uses `@cf/baai/bge-small-en-v1.5` embeddings. Both are configurable with `AI_ENRICHMENT_MODEL` and `AI_EMBEDDING_MODEL`. Model output remains advisory: strict schemas, source-evidence checks, and deterministic clustering thresholds control what reaches storage and delivery.
 
+Multi-source cluster synthesis uses `@cf/meta/llama-3.2-3b-instruct` by default and can be changed with `AI_SYNTHESIS_MODEL`. The stronger model is reserved for clusters with multiple reports; single-source items continue using the lighter summary model. Ranking and preference decisions never depend on generative output.
+
 ## Models evaluated
 
 ### Cloudflare Workers AI BART Large CNN

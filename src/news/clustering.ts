@@ -2,6 +2,7 @@ import { SOURCES } from '../config/sources.ts';
 import type { DiscordRoute, Env, NewsAudience, StoredStory } from '../types.ts';
 import { enrichStories, type EnrichedStory } from '../ai/enrichment.ts';
 import { discordRoute, loadStoryCandidates } from './pipeline.ts';
+import { personalizedRank } from './ranking.ts';
 
 export interface StoryCluster {
   id: string;
@@ -112,7 +113,8 @@ export async function loadClusteredTopStories(
   limit: number,
   windowHours: number,
   audience: NewsAudience,
-  route?: DiscordRoute
+  route?: DiscordRoute,
+  rankingContext = 'brief'
 ): Promise<StoredStory[]> {
   const candidates = (await loadStoryCandidates(env, Math.max(12, limit * 3), windowHours, audience))
     .filter((story) => !route || discordRoute(story) === route);
@@ -120,13 +122,14 @@ export async function loadClusteredTopStories(
   const clusters = clusterStories(enriched);
   try { await persistClusters(env, clusters); }
   catch (error) { console.warn(JSON.stringify({ event: 'story_cluster_write_failed', audience, route, error: String(error) })); }
-  return clusters
-    .sort((left, right) => Math.max(...right.members.map((item) => item.story.score)) - Math.max(...left.members.map((item) => item.story.score)))
-    .slice(0, limit)
-    .map((cluster) => ({
+  const ranked = await personalizedRank(env, clusters, audience, limit, rankingContext);
+  return ranked.map(({ cluster, ranking }) => ({
       ...cluster.canonical.story,
       cluster_id: cluster.id,
       cluster_source_count: new Set(cluster.members.map((member) => member.story.publisher)).size,
-      cluster_match_method: cluster.members.length > 1 ? 'semantic' : 'single'
+      cluster_match_method: cluster.members.length > 1 ? 'semantic' : 'single',
+      ranking_explanation: ranking.matchedPreferences,
+      cluster_context: cluster.members.slice(0, 5).map((member) => ({ title: member.story.title,
+        publisher: member.story.publisher, excerpt: member.story.excerpt.slice(0, 1200), url: member.story.canonical_url }))
     }));
 }

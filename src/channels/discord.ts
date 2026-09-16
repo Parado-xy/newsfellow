@@ -37,6 +37,10 @@ export const discordFormatter: ChannelFormatter = {
       if (story.participation_mode) fields.push(`**Format:** ${escapeDiscord(story.participation_mode)}`);
       if (story.application_url) fields.push(`**Apply:** [Direct application](${story.application_url})`);
       if ((story.cluster_source_count ?? 1) > 1) fields.push(`**Coverage:** ${story.cluster_source_count} reports`);
+      if (story.ranking_explanation?.length) {
+        const reasons = story.ranking_explanation.slice(0, 2).map((value) => value.split(':')[1]).filter(Boolean);
+        if (reasons.length) fields.push(`**Selected for:** ${reasons.map(escapeDiscord).join(', ')}`);
+      }
       const actionable = fields.length ? `\n\n${fields.join('\n')}` : '';
       return `**${labels(item, new Date())} • [${escapeDiscord(story.title)}](${story.canonical_url})**\n${escapeDiscord(summary.whatHappened)}${actionable}\n\n**Why it matters:** ${escapeDiscord(summary.whyItMatters)}\n*Source: ${escapeDiscord(story.publisher)}*`;
     });
@@ -55,6 +59,9 @@ export const discordFormatter: ChannelFormatter = {
   start: () => { throw new Error('Discord does not support start commands'); },
   unknownCommand: () => { throw new Error('Discord does not support commands'); },
   preparingBrief: () => { throw new Error('Discord does not support brief commands'); },
+  preparingWeekly: () => { throw new Error('Discord does not support weekly commands'); },
+  preferences: () => { throw new Error('Discord does not support preference commands'); },
+  preferenceUpdated: () => { throw new Error('Discord does not support preference commands'); },
   commandFailure: () => { throw new Error('Discord does not support commands'); },
   monitoringAlert: () => { throw new Error('Discord does not support monitoring alerts'); }
 };

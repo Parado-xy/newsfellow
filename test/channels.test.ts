@@ -10,9 +10,16 @@ test('normalizes Telegram commands without leaking Telegram payloads into comman
     message: { message_id: 7, chat: { id: 123 }, text: '/brief@NewsFellowBot now' }
   }), {
     channel: 'telegram', destination: '123', sender: '123', command: 'brief',
-    rawCommand: '/brief', eventId: '42'
+    rawCommand: '/brief', arguments: ['now'], eventId: '42'
   });
   assert.equal(parseTelegramUpdate({ update_id: 43 }), null);
+});
+
+test('normalizes preference and weekly commands with arguments', () => {
+  const preference = parseTelegramUpdate({ update_id: 50, message: { message_id: 8, chat: { id: 123 }, text: '/more systems programming' } });
+  assert.equal(preference?.command, 'more');
+  assert.deepEqual(preference?.arguments, ['systems', 'programming']);
+  assert.equal(parseTelegramUpdate({ update_id: 51, message: { message_id: 9, chat: { id: 123 }, text: '/weekly' } })?.command, 'weekly');
 });
 
 test('keeps Telegram-specific status and operations markup in the formatter', () => {
@@ -24,7 +31,7 @@ test('keeps Telegram-specific status and operations markup in the formatter', ()
   const operations = telegramFormatter.operations({
     collection: 'success', delivery: 'sent', failedDeliveries24h: 0,
     unhealthySources: [{ name: 'A <feed>', failures: 2 }], aiHealth: '4/5 successful',
-    semanticHealth: '10 enriched • 8 embedded • 6 clusters'
+    semanticHealth: '10 enriched • 8 embedded • 6 clusters', personalizationHealth: '10 preferences'
   });
   assert.match(operations, /A &lt;feed&gt;/);
 });

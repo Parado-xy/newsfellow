@@ -8,6 +8,7 @@ export interface Summary {
 export interface SummaryContext {
   subjectId?: string;
   correlationId?: string;
+  clusterContext?: Array<{ title: string; publisher: string; excerpt: string }>;
 }
 
 export type Summarizer = (title: string, excerpt: string, topics: string[], context?: SummaryContext) => Promise<Summary>;

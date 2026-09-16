@@ -5,6 +5,12 @@ function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function preferenceReason(values?: string[]): string {
+  if (!values?.length) return '';
+  const labels = values.slice(0, 2).map((value) => value.split(':')[1]).filter(Boolean);
+  return labels.length ? `\n<i>Selected for: ${labels.map(escapeHtml).join(', ')}</i>` : '';
+}
+
 export const telegramFormatter: ChannelFormatter = {
   digest(content: DigestContent): string[] {
     if (!content.stories.length) {
@@ -12,7 +18,7 @@ export const telegramFormatter: ChannelFormatter = {
     }
     const sections = content.stories.map(({ story, summary }, index) => {
       const coverage = (story.cluster_source_count ?? 1) > 1 ? ` • ${story.cluster_source_count} reports` : '';
-      return `<b>${index + 1}. <a href="${escapeHtml(story.canonical_url)}">${escapeHtml(story.title)}</a></b>\n${escapeHtml(summary.whatHappened)}\n\n<i>Why it matters:</i> ${escapeHtml(summary.whyItMatters)}\n<i>Source: ${escapeHtml(story.publisher)}${coverage}</i>`;
+      return `<b>${index + 1}. <a href="${escapeHtml(story.canonical_url)}">${escapeHtml(story.title)}</a></b>\n${escapeHtml(summary.whatHappened)}\n\n<i>Why it matters:</i> ${escapeHtml(summary.whyItMatters)}\n<i>Source: ${escapeHtml(story.publisher)}${coverage}</i>${preferenceReason(story.ranking_explanation)}`;
     });
     const chunks: string[] = [];
     let current = `<b>NEWSFELLOW • ${escapeHtml(content.heading)}</b>\n\n`;
@@ -30,12 +36,20 @@ export const telegramFormatter: ChannelFormatter = {
     const sources = content.unhealthySources.length
       ? content.unhealthySources.map((source) => `• ${escapeHtml(source.name)}: ${source.failures} consecutive failure(s)`).join('\n')
       : 'All tracked sources healthy';
-    return `<b>NewsFellow operations</b>\n\n<b>Last collection</b>\n${escapeHtml(content.collection)}\n\n<b>Last delivery</b>\n${escapeHtml(content.delivery)}\n\n<b>Failed deliveries, 24h</b>\n${content.failedDeliveries24h}\n\n<b>AI health, 24h</b>\n${escapeHtml(content.aiHealth)}\n\n<b>Semantic index</b>\n${escapeHtml(content.semanticHealth)}\n\n<b>Source health</b>\n${sources}`;
+    return `<b>NewsFellow operations</b>\n\n<b>Last collection</b>\n${escapeHtml(content.collection)}\n\n<b>Last delivery</b>\n${escapeHtml(content.delivery)}\n\n<b>Failed deliveries, 24h</b>\n${content.failedDeliveries24h}\n\n<b>AI health, 24h</b>\n${escapeHtml(content.aiHealth)}\n\n<b>Semantic index</b>\n${escapeHtml(content.semanticHealth)}\n\n<b>Personalization</b>\n${escapeHtml(content.personalizationHealth)}\n\n<b>Source health</b>\n${sources}`;
   },
   collectionFooter: (sourcesOk, inserted) => `<i>${sourcesOk} sources checked • ${inserted} new stories</i>`,
-  start: () => '<b>NewsFellow is ready.</b>\n\nUse /brief for news, /status for a quick health check, or /report for the operations report. Morning and evening round-ups are delivered automatically.',
-  unknownCommand: () => 'Available commands: /brief, /status, /report',
+  start: () => '<b>NewsFellow is ready.</b>\n\nUse /brief for news, /weekly for a seven-day synthesis, /preferences to inspect your ranking profile, /more topic or /less topic to tune it, /status for health, or /report for operations. Morning and evening round-ups are delivered automatically.',
+  unknownCommand: () => 'Available commands: /brief, /weekly, /preferences, /more topic, /less topic, /status, /report',
   preparingBrief: () => 'Preparing your brief from the latest collected stories…',
+  preparingWeekly: () => 'Preparing your weekly synthesis from the strongest story clusters…',
+  preferences(items) {
+    if (!items.length) return '<b>NewsFellow preferences</b>\nNo preferences recorded.';
+    return `<b>NewsFellow preferences</b>\n${items.map((item) => `${item.weight >= 0 ? '↑' : '↓'} ${escapeHtml(item.value)}: ${item.weight.toFixed(1)}`).join('\n')}\n\nUse /more topic or /less topic to adjust.`;
+  },
+  preferenceUpdated(value, weight) {
+    return `Preference updated: <b>${escapeHtml(value)}</b> is now ${weight > 0 ? 'prioritized' : weight < 0 ? 'deprioritized' : 'neutral'} (${weight.toFixed(1)}).`;
+  },
   commandFailure: () => 'NewsFellow could not complete that request. Please try again shortly.',
   monitoringAlert(title, detail, runId) {
     const suffix = runId ? `\n<i>Run: ${escapeHtml(runId)}</i>` : '';
@@ -46,14 +60,16 @@ export const telegramFormatter: ChannelFormatter = {
 export function parseTelegramUpdate(update: TelegramUpdate): InboundCommand | null {
   const message = update.message;
   if (!message?.text) return null;
-  const rawCommand = message.text.trim().split(/\s+/)[0].toLowerCase().replace(/@[^\s]+$/, '');
+  const parts = message.text.trim().split(/\s+/);
+  const rawCommand = parts[0].toLowerCase().replace(/@[^\s]+$/, '');
   const known = new Map<string, InboundCommand['command']>([
-    ['/start', 'start'], ['/brief', 'brief'], ['/status', 'status'], ['/report', 'report']
+    ['/start', 'start'], ['/brief', 'brief'], ['/weekly', 'weekly'], ['/status', 'status'], ['/report', 'report'],
+    ['/preferences', 'preferences'], ['/more', 'more'], ['/less', 'less']
   ]);
   const chatId = String(message.chat.id);
   return {
     channel: 'telegram', destination: chatId, sender: chatId,
-    command: known.get(rawCommand) ?? 'unknown', rawCommand,
+    command: known.get(rawCommand) ?? 'unknown', rawCommand, arguments: parts.slice(1),
     eventId: String(update.update_id)
   };
 }

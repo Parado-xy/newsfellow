@@ -50,6 +50,12 @@ Before ranking a delivery window, NewsFellow enriches a bounded candidate set wi
 
 Workers AI embeddings and deterministic title/entity similarity group multiple reports about the same event. Embeddings alone cannot merge unrelated stories: semantic matches require a high vector threshold plus lexical or entity evidence, and conflicting event types are rejected. The highest-trust source becomes the canonical story, while the channel formatter notes multi-source coverage. D1 stores intelligence, embeddings, cluster membership, similarity, and match method so `/report` can expose semantic-index health. This D1 implementation fits the current bounded news volume and leaves a clean path to Vectorize when corpus size or query patterns justify it.
 
+### Personalization and synthesis
+
+Ranking is explicit and inspectable rather than delegated to an LLM. NewsFellow combines the original source score, preference match, significance/novelty, actionability, freshness, source trust, and a diversity adjustment. Every selected cluster creates a bounded 30-day ranking decision with its component scores and matched preferences. Delivered entries name the preference that influenced selection.
+
+The private Telegram profile can be tuned with `/more <topic>` and `/less <topic>` and inspected with `/preferences`. Each adjustment updates a bounded preference weight and records a feedback signal. `/weekly` creates an on-demand seven-day synthesis. When a cluster contains multiple reports, a separate versioned synthesis prompt receives bounded excerpts from up to five sources; single-source stories retain the cheaper summary path. Provider, validation, or persistence failures continue to fall back without blocking delivery.
+
 ## Prerequisites
 
 - Node.js 22+
